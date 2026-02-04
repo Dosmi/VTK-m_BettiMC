@@ -1,0 +1,11 @@
+.DS_Store
+*vscode
+.anari_deps
+*.user
+*.cflags
+*.config
+*.creator
+*.cxxflags
+*.files
+*.includes
+*.zip
