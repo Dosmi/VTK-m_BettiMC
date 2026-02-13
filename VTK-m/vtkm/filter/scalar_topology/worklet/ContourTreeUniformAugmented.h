@@ -80,6 +80,11 @@
 #include <vtkm/filter/scalar_topology/worklet/contourtree_augmented/meshtypes/mesh_boundary/MeshBoundary3D.h>
 #include <vtkm/filter/scalar_topology/worklet/contourtree_augmented/meshtypes/mesh_boundary/MeshBoundaryContourTreeMesh.h>
 
+// PACT (Parcel-based (Betti) Augmented Contour Tree) contribution
+#include <vtkm/filter/scalar_topology/worklet/contourtree_distributed/PrintGraph.h>
+
+#define WRITE_FILES 1
+
 namespace vtkm
 {
 namespace worklet
@@ -140,6 +145,7 @@ public:
       mesh,
       computeRegularStructure,
       meshBoundary);
+      
     return;
   }
 
@@ -203,6 +209,52 @@ public:
                      mesh,
                      computeRegularStructure,
                      mesh.GetMeshBoundaryExecutionObject());
+                     
+                     
+#if WRITE_FILES
+
+		  std::cout << "Writing ... CT-full-superdot.gv" << std::endl;
+          std::ofstream outFile("CT-full-superdot.gv");
+
+//          // for CT visualising for 2025 papers enable SHOW_SUPER_STRUCTURE SHOW_SUPERNODE_ID SHOW_SUPERARC_ID SHOW_MESH_SORT_ID
+//                      vtkm::Id detailedMask =   vtkm::worklet::contourtree_distributed::SHOW_SUPER_STRUCTURE \
+//                                            | vtkm::worklet::contourtree_distributed::SHOW_SUPERNODE_ID \
+//                                            | vtkm::worklet::contourtree_distributed::SHOW_SUPERARC_ID \
+//                                            | vtkm::worklet::contourtree_distributed::SHOW_MESH_SORT_ID \
+
+          //vtkm::Id detailedMask =   vtkm::worklet::contourtree_distributed::SHOW_SUPER_STRUCTURE \
+                                  //| vtkm::worklet::contourtree_distributed::SHOW_SUPERNODE_ID \
+                                  //| vtkm::worklet::contourtree_distributed::SHOW_SUPERARC_ID \
+                                  //| vtkm::worklet::contourtree_distributed::SHOW_MESH_SORT_ID \
+                                  //| vtkm::worklet::contourtree_distributed::SHOW_SUPERPARENT \
+                                  //| vtkm::worklet::contourtree_distributed::SHOW_DATA_VALUE; // additional
+    ////                              | vtkm::worklet::contourtree_distributed::SHOW_SUPERPARENT \
+    ////                              | vtkm::worklet::contourtree_distributed::SHOW_ITERATION \
+    ////                              | vtkm::worklet::contourtree_distributed::SHOW_HYPER_STRUCTURE \
+    ////                              | vtkm::worklet::contourtree_distributed::SHOW_ALL_IDS \
+    ////                              | vtkm::worklet::contourtree_distributed::SHOW_ALL_HYPERIDS;
+
+          // clean tree (2025-12-05)
+          vtkm::Id detailedMask = vtkm::worklet::contourtree_distributed::SHOW_ALL_STRUCTURE \
+                                    | vtkm::worklet::contourtree_distributed::SHOW_ALL_IDS \
+                                    | vtkm::worklet::contourtree_distributed::SHOW_ALL_SUPERIDS \
+                                    | vtkm::worklet::contourtree_distributed::SHOW_ALL_HYPERIDS;
+
+
+          // Call the function after you've computed ContourTree and your associated data structures (`mesh` and `field`):
+          outFile << vtkm::worklet::contourtree_distributed::ContourTreeDotGraphPrintSerial(
+              "Contour Tree Super Dot",         // label/title
+              mesh,                             // mesh (re)constructed above
+              fieldArray, //fakeFieldArray, //fieldArray,     // scalar data array handle
+              contourTree,                      // computed contour tree structure
+              detailedMask,                     // detailed output with all info
+              vtkm::cont::ArrayHandle<vtkm::Id>()); // global ids
+
+
+          outFile.close();
+#endif
+                     
+                     
       return;
     }
     // 3D Contour Tree with Freudenthal

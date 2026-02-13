@@ -155,6 +155,16 @@ public:
   // vectors tracking the segments used in each iteration of the hypersweep
   IdArrayType FirstSupernodePerIteration;
   IdArrayType FirstHypernodePerIteration;
+  
+    // 2025-12-15 adding the root node explicitly, ...
+  // ... since after betti augmentation the root node will not be guaranteed to be last
+  vtkm::Id Rootnode;
+  std::vector<vtkm::Id> translateSupernodes;
+
+  // sortID to Betti1 number map
+  IdArrayType SupernodeBetti;
+  IdArrayType BettiOriginalSuperparents;
+
 
 
   // ROUTINES

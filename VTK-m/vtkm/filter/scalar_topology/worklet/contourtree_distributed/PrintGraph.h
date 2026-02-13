@@ -255,6 +255,411 @@ constexpr vtkm::Id SHOW_HIERARCHICAL_STANDARD =
   (SHOW_SUPER_STRUCTURE | SHOW_HYPER_STRUCTURE | SHOW_ALL_IDS | SHOW_ALL_SUPERIDS |
    SHOW_ALL_HYPERIDS);
 
+
+// 0.	Routine for printing dot for contour tree regular / super / hyper structure
+VTKM_CONT
+template <typename T, typename StorageType, typename MeshType, typename VectorType>
+std::string ContourTreeDotGraphPrintSerial(
+  const std::string& label, // the label to use as title for the graph
+  MeshType& mesh,           // the underlying mesh for the contour tree
+                            // don't need a local->global relabeller, we are on single node, serial
+  const vtkm::cont::ArrayHandle<T, StorageType>& field,
+  const vtkm::worklet::contourtree_augmented::ContourTree& contourTree, // the contour tree itself passed from the filter (const)
+  const vtkm::Id showMask = SHOW_ALL_STANDARD, // mask with flags for what elements to show
+  // const vtkm::worklet::contourtree_augmented::IdArrayType &necessaryFlags = vtkm::worklet::contourtree_augmented::IdArrayType(),
+  // array with flags for "necessary"
+  const VectorType& perNodeValues = VectorType()) // an arbitrary vector of values
+{                                                 // ContourTreeDotGraphPrintSerial()
+  // initialise a string stream to capture the output
+  std::stringstream outStream;
+
+  // now grab portals to all the variables we will need
+  auto nodesPortal = contourTree.Nodes.ReadPortal();
+  auto arcsPortal = contourTree.Arcs.ReadPortal();
+  auto superparentsPortal = contourTree.Superparents.ReadPortal();
+  auto supernodesPortal = contourTree.Supernodes.ReadPortal();
+  auto superarcsPortal = contourTree.Superarcs.ReadPortal();
+  auto hyperparentsPortal = contourTree.Hyperparents.ReadPortal();
+  auto whenTransferredPortal = contourTree.WhenTransferred.ReadPortal();
+  auto hypernodesPortal = contourTree.Hypernodes.ReadPortal();
+  auto hyperarcsPortal = contourTree.Hyperarcs.ReadPortal();
+  // auto necessaryFlagsPortal	= necessaryFlags.ReadPortal();
+  auto perNodeValuesPortal = perNodeValues.ReadPortal();
+
+  // work out how long the computed value is
+  int nodeValueType = vtkm::worklet::contourtree_distributed::BAD_PER_NODE_VALUES;
+  vtkm::Id perNodeSize = perNodeValues.GetNumberOfValues();
+  if (perNodeSize == 0)
+    nodeValueType = vtkm::worklet::contourtree_distributed::NO_PER_NODE_VALUES;
+  else if (perNodeSize == contourTree.Nodes.GetNumberOfValues())
+    nodeValueType = vtkm::worklet::contourtree_distributed::PER_REGULAR_NODE_VALUES;
+  else if (perNodeSize == contourTree.Supernodes.GetNumberOfValues())
+    nodeValueType = vtkm::worklet::contourtree_distributed::PER_SUPER_NODE_VALUES;
+  else if (perNodeSize == contourTree.Hypernodes.GetNumberOfValues())
+    nodeValueType = vtkm::worklet::contourtree_distributed::PER_HYPER_NODE_VALUES;
+  else
+  { // error message
+    outStream << "ERROR in ContourTreeDotGraphPrint().\n";
+    outStream << "Per node values array must be empty, or\n";
+    outStream << "Same length as regular nodes ("
+              << std::setw(vtkm::worklet::contourtree_distributed::INDEX_WIDTH)
+              << contourTree.Nodes.GetNumberOfValues() << "), or\n";
+    outStream << "Same length as super nodes   ("
+              << std::setw(vtkm::worklet::contourtree_distributed::INDEX_WIDTH)
+              << contourTree.Supernodes.GetNumberOfValues() << "), or\n";
+    outStream << "Same length as hyper nodes   ("
+              << std::setw(vtkm::worklet::contourtree_distributed::INDEX_WIDTH)
+              << contourTree.Hypernodes.GetNumberOfValues() << ")\n";
+    outStream << "Actual length was            ("
+              << std::setw(vtkm::worklet::contourtree_distributed::INDEX_WIDTH)
+              << perNodeValues.GetNumberOfValues() << ")\n";
+  } // error message
+
+  // print the header information
+  outStream << "digraph ContourTree\n\t{\n";
+  outStream << "\tlabel=\"" << std::setw(1) << label << "\"\n\tlabelloc=t\n\tfontsize=30\n";
+  outStream << "\t// Nodes" << std::endl;
+
+  auto meshSortOrderPortal = mesh.SortOrder.ReadPortal();
+//  auto globalIds = mesh.GetGlobalIdsFromSortIndices(contourTree.Nodes, localToGlobalIdRelabeler);
+//  auto globalIdsPortal = globalIds.ReadPortal();
+  auto dataValuesPortal = field.ReadPortal();
+
+  std::cout << "Writing ... ContourTreeGraph--original-fullCT-REGULAR-VALUE-SORT-SP.txt" << std::endl;
+  std::ofstream file("ContourTreeGraph--original-fullCT-REGULAR-VALUE-SORT-SP.txt");
+  for (vtkm::Id node = 0; node < contourTree.Nodes.GetNumberOfValues(); node++)
+  { // per node
+    // the nodes array is actually sorted by superarc, but the superarcs array is not
+    // so we ignore the nodes array and work directly with the node #
+    vtkm::Id sortID = nodesPortal.Get(node);
+
+    // retrieve the regular ID
+    vtkm::Id regularID = meshSortOrderPortal.Get(sortID);
+
+    // retrieve the global ID - turned off for serial, since that is its local ID
+//    vtkm::Id globalID = globalIdsPortal.Get(sortID);
+
+    // retrieve the values
+    auto dataValue = dataValuesPortal.Get(regularID);
+
+    // retrieve the superparent
+    vtkm::Id superparent = superparentsPortal.Get(sortID);
+
+    file << regularID << "," << dataValue << "," << sortID << "," << superparent << std::endl;
+
+  }
+
+
+  // loop through all of the nodes in the regular list
+  for (vtkm::Id node = 0; node < contourTree.Nodes.GetNumberOfValues(); node++)
+  { // per node
+    // the nodes array is actually sorted by superarc, but the superarcs array is not
+    // so we ignore the nodes array and work directly with the node #
+    vtkm::Id sortID = nodesPortal.Get(node);
+
+    // retrieve the regular ID
+    vtkm::Id regularID = meshSortOrderPortal.Get(sortID);
+
+    // retrieve the global ID - turned off for serial, since that is its local ID
+//    vtkm::Id globalID = globalIdsPortal.Get(sortID);
+
+    // retrieve the values
+    auto dataValue = dataValuesPortal.Get(regularID);
+
+    // retrieve the superparent
+    vtkm::Id superparent = superparentsPortal.Get(sortID);
+
+    // and retrieve the iteration #
+    vtkm::Id iteration =
+      vtkm::worklet::contourtree_augmented::MaskedIndex(whenTransferredPortal.Get(superparent));
+
+    // work out the super ID & hyper ID
+    vtkm::Id superID = vtkm::worklet::contourtree_augmented::NO_SUCH_ELEMENT;
+    vtkm::Id hyperparent = vtkm::worklet::contourtree_augmented::NO_SUCH_ELEMENT;
+    vtkm::Id hyperID = vtkm::worklet::contourtree_augmented::NO_SUCH_ELEMENT;
+    vtkm::Id nodeType = vtkm::worklet::contourtree_distributed::NODE_TYPE_REGULAR;
+
+    // test for super
+    if (supernodesPortal.Get(superparent) == sortID)
+    { // at least super
+      // set super ID
+      superID = superparent;
+      // set hyperparent
+      hyperparent = hyperparentsPortal.Get(superID);
+      // set nodetype
+      nodeType = NODE_TYPE_SUPER;
+      // test for hyper
+      if (hypernodesPortal.Get(hyperparent) == superID)
+      { // hyper node
+        nodeType = NODE_TYPE_HYPER;
+        hyperID = hyperparent;
+      } // hyper node
+    }   // at least super
+
+    // now, if we don't want the regular nodes, we want to skip them entirely, so
+    bool showNode = false;
+    // regular structure always shows all nodes
+    if (showMask & vtkm::worklet::contourtree_distributed::SHOW_REGULAR_STRUCTURE)
+      showNode = true;
+    // super structure shows super & hyper nodes only
+    else if (showMask & vtkm::worklet::contourtree_distributed::SHOW_SUPER_STRUCTURE)
+      showNode = (nodeType != vtkm::worklet::contourtree_distributed::NODE_TYPE_REGULAR);
+    else if (showMask & vtkm::worklet::contourtree_distributed::SHOW_HYPER_STRUCTURE)
+      showNode = (nodeType == vtkm::worklet::contourtree_distributed::NODE_TYPE_HYPER);
+
+    // if we didn't set the flag, skip the node
+    if (!showNode)
+      continue;
+
+    // print the vertex ID, which should be the sort ID & needs to be left-justified to work
+    outStream << "\ts" << std::setw(1) << sortID;
+
+    // print the style characteristics - node is filled and fixed size
+    outStream << " [style=filled,fixedsize=true,fontname=\"Courier\",margin=\"0.02,0.02\"";
+    // specify the style based on the type of node
+    if (nodeType == vtkm::worklet::contourtree_distributed::NODE_TYPE_REGULAR)
+      outStream << ",height=\"1.7in\",width=\"1.7in\",penwidth=5";
+    else if (nodeType == vtkm::worklet::contourtree_distributed::NODE_TYPE_SUPER)
+      outStream << ",height=\"2.5in\",width=\"2.5in\",penwidth=10";
+    else if (nodeType == vtkm::worklet::contourtree_distributed::NODE_TYPE_HYPER)
+      outStream << ",height=\"2.5in\",width=\"2.5in\",penwidth=15";
+
+    // shape should always be circular.
+    outStream << ",shape=circle";
+
+    // fill colour is grey for boundary or necessary, if these are passed in
+    bool isGrey = false;
+    // TODO: Add liesOnBoundary and isNecessary so we can define the gray value
+    /*
+    if (showMask & vtkm::worklet::contourtree_distributed::SHOW_BOUNDARY_NODES)
+      isGrey = (showMask & vtkm::worklet::contourtree_distributed::SHOW_REGULAR_STRUCTURE) && mesh.liesOnBoundary(regularID);
+    else if (showMask & vtkm::worklet::contourtree_distributed::SHOW_CRITICAL_BOUNDARY_NODES)
+      isGrey = (showMask & vtkm::worklet::contourtree_distributed::SHOW_REGULAR_STRUCTURE) && mesh.isNecessary(regularID);
+    else if (showMask & vtkm::worklet::contourtree_distributed::SHOW_NECESSARY_SUPERNODES)
+      isGrey = 	(showMask & vtkm::worklet::contourtree_distributed::SHOW_SUPER_STRUCTURE)			// skip if superstructure not shown
+          &&	!vtkm::worklet::contourtree_augmented::NoSuchElement(superID)						// ignore non-super nodes
+          && 	(necessaryFlags.GetNumberOfValues() == contourTree.Supernodes.GetNumberOfValues())	// skip if necessary flags array is wrong size
+          &&	necessaryFlagsPortal.Get(superID);
+    */
+    // after setting the flag, its easy
+    outStream << (isGrey ? ",fillcolor=grey" : ",fillcolor=white");
+
+    // stroke colour depends on iteration
+    outStream << ",color="
+              << vtkm::worklet::contourtree_augmented::NODE_COLORS
+                   [iteration % vtkm::worklet::contourtree_augmented::N_NODE_COLORS];
+
+    // start printing the label
+    outStream << ",label=\"";
+    // print the global ID
+//    if (showMask & vtkm::worklet::contourtree_distributed::SHOW_GLOBAL_ID)
+//      outStream << "g " << std::setw(vtkm::worklet::contourtree_distributed::INDEX_WIDTH)
+//                << globalID << "\\n";
+    // print the value
+    if (showMask & vtkm::worklet::contourtree_distributed::SHOW_DATA_VALUE)
+      outStream << "v " << std::setw(vtkm::worklet::contourtree_distributed::INDEX_WIDTH)
+                << dataValue << "\\n";
+    // print the regular & sort IDs
+    if (showMask & vtkm::worklet::contourtree_distributed::SHOW_MESH_REGULAR_ID)
+      outStream << "r " << std::setw(vtkm::worklet::contourtree_distributed::INDEX_WIDTH)
+                << regularID << "\\n";
+    if (showMask & vtkm::worklet::contourtree_distributed::SHOW_MESH_SORT_ID)
+      outStream << "s " << std::setw(vtkm::worklet::contourtree_distributed::INDEX_WIDTH) << sortID
+                << "\\n";
+    // and the node ID
+    if (showMask & vtkm::worklet::contourtree_distributed::SHOW_NODE_ID)
+      outStream << "n " << std::setw(vtkm::worklet::contourtree_distributed::INDEX_WIDTH) << node
+                << "\\n";
+    // print the superparent
+    if (showMask & vtkm::worklet::contourtree_distributed::SHOW_SUPERPARENT)
+      outStream << "sp" << std::setw(vtkm::worklet::contourtree_distributed::INDEX_WIDTH)
+                << superparent << "\\n";
+
+    // add arbitrary per node value if it is regular in nature
+    if ((showMask & vtkm::worklet::contourtree_distributed::SHOW_EXTRA_DATA) &&
+        (nodeValueType == vtkm::worklet::contourtree_distributed::PER_REGULAR_NODE_VALUES))
+      outStream << "x " << std::setw(vtkm::worklet::contourtree_distributed::INDEX_WIDTH)
+                << perNodeValuesPortal.Get(regularID) << "\\n";
+
+    // we now want to add labelling information specific to supernodes, but also present in hypernodes
+    if (nodeType != vtkm::worklet::contourtree_distributed::NODE_TYPE_REGULAR)
+    { // at least super
+
+      // print the super node ID
+      if (showMask & vtkm::worklet::contourtree_distributed::SHOW_SUPERNODE_ID)
+        outStream << "SN" << std::setw(vtkm::worklet::contourtree_distributed::INDEX_WIDTH)
+                  << superID << "\\n";
+
+      // print the hyperparent as well
+      if (showMask & vtkm::worklet::contourtree_distributed::SHOW_HYPERPARENT)
+        outStream << "HP" << std::setw(vtkm::worklet::contourtree_distributed::INDEX_WIDTH)
+                  << hyperparent << "\\n";
+      if (showMask & vtkm::worklet::contourtree_distributed::SHOW_ITERATION)
+        outStream << "IT" << std::setw(vtkm::worklet::contourtree_distributed::INDEX_WIDTH)
+                  << iteration << "\\n";
+
+      // add arbitrary per node value if it is super in nature
+      if ((showMask & vtkm::worklet::contourtree_distributed::SHOW_EXTRA_DATA) &&
+          (nodeValueType == vtkm::worklet::contourtree_distributed::PER_SUPER_NODE_VALUES))
+        outStream << "X " << std::setw(vtkm::worklet::contourtree_distributed::INDEX_WIDTH)
+                  << perNodeValuesPortal.Get(superID) << "\\n";
+    } // at least super
+
+    // now add even more for hypernodes
+    if (nodeType == vtkm::worklet::contourtree_distributed::NODE_TYPE_HYPER)
+    { // hyper node
+      if (showMask & vtkm::worklet::contourtree_distributed::SHOW_HYPERNODE_ID)
+        outStream << "HN" << std::setw(vtkm::worklet::contourtree_distributed::INDEX_WIDTH)
+                  << hyperID << "\\n";
+
+      // add arbitrary per node value if it is hyper in nature
+      if ((showMask & vtkm::worklet::contourtree_distributed::SHOW_EXTRA_DATA) &&
+          (nodeValueType == vtkm::worklet::contourtree_distributed::PER_HYPER_NODE_VALUES))
+        outStream << "X " << std::setw(vtkm::worklet::contourtree_distributed::INDEX_WIDTH)
+                  << perNodeValuesPortal.Get(hyperID) << "\\n";
+    } // hyper node
+
+    outStream << "\"]" << std::endl;
+  } // per node
+
+  // always show the null node
+  outStream << "\t// Null Node" << std::endl;
+  outStream
+    << "\tNULL "
+       "[style=filled,fixedsize=true,fontname=\"Courier\",margin=\"0.02,0.02\",height=\"0.5in\","
+       "width=\"0.5in\",penwidth=1,shape=circle,fillcolor=white,color=black,label=\"NULL\"]"
+    << std::endl;
+
+  // start the arcs
+  outStream << "\t// Arcs" << std::endl;
+
+  // now add regular arcs (if requested)
+  if (showMask & vtkm::worklet::contourtree_distributed::SHOW_REGULAR_STRUCTURE)
+    for (vtkm::Id node = 0; node < contourTree.Nodes.GetNumberOfValues(); node++)
+    { // per node
+      // retrieve the "to" end
+      vtkm::Id to = arcsPortal.Get(node);
+
+      // if "to" is NSE, it's the root node
+      if (vtkm::worklet::contourtree_augmented::NoSuchElement(to))
+        outStream << "\ts" << std::setw(1) << node << " -> NULL [penwidth=2";
+      else
+      { // actual node
+        // mask out the flags to get the target node
+        to = vtkm::worklet::contourtree_augmented::MaskedIndex(to);
+
+        // since we're using sort IDs, we compare them
+        if (node < to)
+          outStream << "\ts" << std::setw(1) << to << " -> s" << std::setw(1) << node
+                    << " [dir=back,penwidth=3";
+        else
+          outStream << "\ts" << std::setw(1) << node << " -> s" << std::setw(1) << to
+                    << " [penwidth=3";
+      } // actual node
+
+      // set the color based on the from vertex
+      // retrieve the superparent
+      vtkm::Id superparent = superparentsPortal.Get(node);
+      vtkm::Id iteration =
+        vtkm::worklet::contourtree_augmented::MaskedIndex(whenTransferredPortal.Get(superparent));
+      outStream << ",color="
+                << vtkm::worklet::contourtree_augmented::NODE_COLORS
+                     [iteration % vtkm::worklet::contourtree_augmented::N_NODE_COLORS];
+      if (showMask & SHOW_ARC_ID)
+        outStream << ",label=\"A" << node << "\"";
+      outStream << "]" << std::endl;
+    } // per node
+
+  // show superarcs if requested
+  if (showMask & vtkm::worklet::contourtree_distributed::SHOW_SUPER_STRUCTURE)
+    for (vtkm::Id supernode = 0; supernode < contourTree.Supernodes.GetNumberOfValues();
+         supernode++)
+    { // per supernode
+      // retrieve the sort ID
+      vtkm::Id from = supernodesPortal.Get(supernode);
+
+      // retrieve the "to" end
+      vtkm::Id toSuper = superarcsPortal.Get(supernode);
+
+      // test for "NSE"
+      if (vtkm::worklet::contourtree_augmented::NoSuchElement(toSuper))
+        outStream << "\ts" << std::setw(1) << from << " -> NULL [penwidth=4";
+      else
+      { // supernode
+        // mask out the ascending flag & convert to sort ID
+        vtkm::Id to =
+          supernodesPortal.Get(vtkm::worklet::contourtree_augmented::MaskedIndex(toSuper));
+
+        // now test for ascending with sort IDs as before
+        if (from < to)
+          outStream << "\ts" << std::setw(1) << to << " -> s" << std::setw(1) << from
+                    << " [dir=back,penwidth=7";
+        else
+          outStream << "\ts" << std::setw(1) << from << " -> s" << std::setw(1) << to
+                    << " [penwidth=7";
+      } // supernode
+
+      // set the color based on the from vertex
+      vtkm::Id iteration =
+        vtkm::worklet::contourtree_augmented::MaskedIndex(whenTransferredPortal.Get(supernode));
+      outStream << ",color="
+                << vtkm::worklet::contourtree_augmented::NODE_COLORS
+                     [iteration % vtkm::worklet::contourtree_augmented::N_NODE_COLORS];
+      if (showMask & vtkm::worklet::contourtree_distributed::SHOW_SUPERARC_ID)
+        outStream << ",label=\"SA" << supernode << "\"";
+      outStream << "]" << std::endl;
+    } // per supernode
+
+  // add hyper arcs if requested
+  if (showMask & vtkm::worklet::contourtree_distributed::SHOW_HYPER_STRUCTURE)
+    for (vtkm::Id hypernode = 0; hypernode < contourTree.Hypernodes.GetNumberOfValues();
+         hypernode++)
+    { // per hypernode
+      // retrieve the sort ID
+      vtkm::Id fromSuper = hypernodesPortal.Get(hypernode);
+      vtkm::Id from = supernodesPortal.Get(fromSuper);
+
+      // retrieve the "to" end
+      vtkm::Id toSuper = hyperarcsPortal.Get(hypernode);
+
+      // test for "NSE"
+      if (vtkm::worklet::contourtree_augmented::NoSuchElement(toSuper))
+        outStream << "\ts" << std::setw(1) << from << " -> NULL [penwidth=6";
+      else
+      { // hypernode
+        // mask out the ascending flag & convert to sort ID
+        vtkm::Id to =
+          supernodesPortal.Get(vtkm::worklet::contourtree_augmented::MaskedIndex(toSuper));
+
+        // now test for ascending with sort IDs as before
+        if (from < to)
+          outStream << "\ts" << std::setw(1) << to << " -> s" << std::setw(1) << from
+                    << " [dir=back,penwidth=12";
+        else
+          outStream << "\ts" << std::setw(1) << from << " -> s" << std::setw(1) << to
+                    << " [penwidth=12";
+      } // hypernode
+
+      // set the color based on the from vertex
+      vtkm::Id iteration =
+        vtkm::worklet::contourtree_augmented::MaskedIndex(whenTransferredPortal.Get(fromSuper));
+      outStream << ",color="
+                << vtkm::worklet::contourtree_augmented::NODE_COLORS
+                     [iteration % vtkm::worklet::contourtree_augmented::N_NODE_COLORS];
+      if (showMask & vtkm::worklet::contourtree_distributed::SHOW_HYPERARC_ID)
+        outStream << ",label=\"HA" << hypernode << "\"";
+      outStream << "]" << std::endl;
+    } // per hypernode
+
+  // print the footer information
+  outStream << "\t}\n";
+
+  // now return the string
+  return outStream.str();
+} // ContourTreeDotGraphPrintSerial()
+
+
+
 // 1.	Routine for printing dot for contour tree regular / super / hyper structure
 VTKM_CONT
 template <typename T, typename StorageType, typename MeshType, typename VectorType>

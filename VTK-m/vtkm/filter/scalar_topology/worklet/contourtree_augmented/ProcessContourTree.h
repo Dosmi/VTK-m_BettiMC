@@ -82,11 +82,20 @@
 #include <vtkm/filter/scalar_topology/worklet/contourtree_augmented/processcontourtree/HypersweepWorklets.h>
 #include <vtkm/filter/scalar_topology/worklet/contourtree_augmented/processcontourtree/PointerDoubling.h>
 
+// for memory usage
+#include <sys/resource.h>
+#include <unistd.h>
+
 //#define DEBUG_PRINT
 
 
 namespace process_contourtree_inc_ns =
   vtkm::worklet::contourtree_augmented::process_contourtree_inc;
+  
+//using ValueType = vtkm::Float64; //vtkm::FloatDefault;
+using ValueType = vtkm::Float32; //vtkm::FloatDefault;
+//using ValueType = vtkm::FloatDefault;
+using FloatArrayType = vtkm::cont::ArrayHandle<ValueType>;
 
 namespace vtkm
 {
@@ -94,6 +103,26 @@ namespace worklet
 {
 namespace contourtree_augmented
 {
+
+struct BettiCoefficients
+{
+    long num_vtx;
+    long num_edg;
+    long num_fac;
+    long num_tet;
+
+    long betti0;
+    long betti1;
+    long betti3;
+};
+
+struct Coefficients
+{
+    long double h1;
+    long double h2;
+    long double h3;
+    long double h4;
+};
 
 
 // TODO Many of the post processing routines still need to be parallelized
@@ -206,6 +235,649 @@ public:
     // now sort it
     vtkm::cont::Algorithm::Sort(saddlePeak, SaddlePeakSort());
   } // CollectSortedSuperarcs()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	
+   // 2026-02-13 refit Betti computation to Marching Cubes meshes
+   void static printMemoryUsage(const std::string& message)
+    {
+        // Red text formatting for highlighting some console output:
+        const std::string ORANGE = "\033[38;2;255;165;0m";  // Start red text
+        const std::string LIGHT_BLUE = "\033[38;5;117m";  // Light blue in 256-color
+        const std::string RESET = "\033[0m"; // End red text
+
+        struct rusage usage;
+        getrusage(RUSAGE_SELF, &usage);
+
+        std::ifstream status_file("/proc/self/status");
+        std::string line;
+
+        size_t current_usage = 0;
+
+        while(std::getline(status_file, line))
+        {
+            if(line.find("VmRSS:") == 0)
+            {
+                std::istringstream iss(line);
+                std::string key;
+                size_t memory; // memory value in kB
+                std::string unit;
+
+                iss >> key >> memory >> unit;
+                current_usage = memory; // return in KB
+            }
+        }
+
+//        std::cout << ORANGE << message << LIGHT_BLUE << " - Memory usage (peak): " << usage.ru_maxrss
+//                  << " KB | (current) " << current_usage << " KB" << RESET << std::endl;
+
+        std::cout << LIGHT_BLUE << message << " - Memory usage (peak): " << usage.ru_maxrss
+                  << " KB | (current) " << current_usage << " KB" << RESET << std::endl;
+
+    }
+
+    // A simple edge struct for clarity
+    struct Edge {
+        vtkm::Id v0, v1;
+    };
+    
+    struct TriangleFace {
+        vtkm::Id v0, v1, v2;
+        bool boundary;
+    };
+    
+    
+    
+    struct ConnectivityOutput
+{
+    std::vector<std::array<vtkm::Id, 2>> edges;
+    std::vector<vtkm::UInt8> edgeBoundary;
+
+    std::vector<std::array<vtkm::Id, 4>> faces;
+    std::vector<vtkm::UInt8> faceBoundary;
+
+    std::vector<std::array<vtkm::Id, 8>> cubes;
+    std::vector<vtkm::UInt8> cubeBoundary;
+};
+
+ConnectivityOutput static ExtractStructuredConnectivity(
+	const std::vector<vtkm::Id>& sortID,
+    const vtkm::cont::DataSet& input)
+{
+    ConnectivityOutput result;
+
+    // --- Get structured cell set ---
+    auto cellSet = input.GetCellSet();
+
+    if (!cellSet.IsType<vtkm::cont::CellSetStructured<3>>())
+    {
+        throw std::runtime_error("Input must be 3D structured grid.");
+    }
+
+    auto structured =
+        cellSet.AsCellSet<vtkm::cont::CellSetStructured<3>>();
+
+    vtkm::Id3 dims = structured.GetPointDimensions();
+    vtkm::Id nx = dims[0];
+    vtkm::Id ny = dims[1];
+    vtkm::Id nz = dims[2];
+
+    // --- Vertex ID helper ---
+    auto vid = [&](vtkm::Id i,
+                   vtkm::Id j,
+                   vtkm::Id k) -> vtkm::Id
+    {
+        return i + j*nx + k*nx*ny;
+    };
+
+    // ==========================================================
+    // EDGES
+    // ==========================================================
+    for (vtkm::Id k = 0; k < nz; ++k)
+    {
+        for (vtkm::Id j = 0; j < ny; ++j)
+        {
+            for (vtkm::Id i = 0; i < nx; ++i)
+            {
+                vtkm::Id v0 = vid(i,j,k);
+
+                // X edge
+                if (i + 1 < nx)
+                {
+                    vtkm::Id v1 = vid(i+1,j,k);
+                    //result.edges.push_back({v0,v1});
+					if (sortID[v0] < sortID[v1]) result.edges.push_back({sortID[v0],sortID[v1]});   
+					else result.edges.push_back({sortID[v1],sortID[v0]});
+                    
+
+                    bool boundary =
+                        (j == 0 || j == ny-1 ||
+                         k == 0 || k == nz-1);
+
+                    result.edgeBoundary.push_back(boundary);
+                }
+
+                // Y edge
+                if (j + 1 < ny)
+                {
+                    vtkm::Id v1 = vid(i,j+1,k);
+                    //result.edges.push_back({v0,v1});
+					if (sortID[v0] < sortID[v1]) result.edges.push_back({sortID[v0],sortID[v1]});   
+					else result.edges.push_back({sortID[v1],sortID[v0]});
+
+                    bool boundary =
+                        (i == 0 || i == nx-1 ||
+                         k == 0 || k == nz-1);
+
+                    result.edgeBoundary.push_back(boundary);
+                }
+
+                // Z edge
+                if (k + 1 < nz)
+                {
+                    vtkm::Id v1 = vid(i,j,k+1);
+                    //result.edges.push_back({v0,v1});
+					if (sortID[v0] < sortID[v1]) result.edges.push_back({sortID[v0],sortID[v1]});   
+					else result.edges.push_back({sortID[v1],sortID[v0]});
+
+
+                    bool boundary =
+                        (i == 0 || i == nx-1 ||
+                         j == 0 || j == ny-1);
+
+                    result.edgeBoundary.push_back(boundary);
+                }
+            }
+        }
+    }
+
+    // ==========================================================
+    // FACES (quads)
+    // ==========================================================
+    for (vtkm::Id k = 0; k < nz; ++k)
+    {
+        for (vtkm::Id j = 0; j < ny-1; ++j)
+        {
+            for (vtkm::Id i = 0; i < nx-1; ++i)
+            {
+                // XY face
+                vtkm::Id v0 = sortID[vid(i,  j,  k)];
+                vtkm::Id v1 = sortID[vid(i+1,j,  k)];
+                vtkm::Id v2 = sortID[vid(i,  j+1,k)];
+                vtkm::Id v3 = sortID[vid(i+1,j+1,k)];
+                
+				// Collect all vertices
+				std::array<vtkm::Id,4> vxs = {v0, v1, v2, v3};
+
+				// Sort array
+				std::sort(vxs.begin(), vxs.end());
+
+				// Push into faces
+				result.faces.push_back(vxs);
+
+                bool boundary =
+                    (k == 0 || k == nz-1);
+
+                result.faceBoundary.push_back(boundary);
+            }
+        }
+    }
+
+    // XZ faces
+    for (vtkm::Id k = 0; k < nz-1; ++k)
+    {
+        for (vtkm::Id j = 0; j < ny; ++j)
+        {
+            for (vtkm::Id i = 0; i < nx-1; ++i)
+            {
+                vtkm::Id v0 = sortID[vid(i,  j,  k)];
+                vtkm::Id v1 = sortID[vid(i+1,j,  k)];
+                vtkm::Id v2 = sortID[vid(i,  j,  k+1)];
+                vtkm::Id v3 = sortID[vid(i+1,j,  k+1)];
+
+                //result.faces.push_back({v0,v1,v2,v3});
+                
+				// Collect all vertices
+				std::array<vtkm::Id,4> vxs = {v0, v1, v2, v3};
+
+				// Sort array
+				std::sort(vxs.begin(), vxs.end());
+
+				// Push into faces
+				result.faces.push_back(vxs);
+
+                bool boundary =
+                    (j == 0 || j == ny-1);
+
+                result.faceBoundary.push_back(boundary);
+            }
+        }
+    }
+
+    // YZ faces
+    for (vtkm::Id k = 0; k < nz-1; ++k)
+    {
+        for (vtkm::Id j = 0; j < ny-1; ++j)
+        {
+            for (vtkm::Id i = 0; i < nx; ++i)
+            {
+                vtkm::Id v0 = sortID[vid(i,  j,  k)];
+                vtkm::Id v1 = sortID[vid(i,  j+1,k)];
+                vtkm::Id v2 = sortID[vid(i,  j,  k+1)];
+                vtkm::Id v3 = sortID[vid(i,  j+1,k+1)];
+
+                //result.faces.push_back({v0,v1,v2,v3});
+                
+				// Collect all vertices
+				std::array<vtkm::Id,4> vxs = {v0, v1, v2, v3};
+
+				// Sort array
+				std::sort(vxs.begin(), vxs.end());
+
+				// Push into faces
+				result.faces.push_back(vxs);
+
+                bool boundary =
+                    (i == 0 || i == nx-1);
+
+                result.faceBoundary.push_back(boundary);
+            }
+        }
+    }
+
+    // ==========================================================
+    // CUBES
+    // ==========================================================
+    for (vtkm::Id k = 0; k < nz-1; ++k)
+    {
+        for (vtkm::Id j = 0; j < ny-1; ++j)
+        {
+            for (vtkm::Id i = 0; i < nx-1; ++i)
+            {
+                vtkm::Id v0 = sortID[vid(i,  j,  k)  ];
+                vtkm::Id v1 = sortID[vid(i+1,j,  k)  ];
+                vtkm::Id v2 = sortID[vid(i,  j+1,k)  ];
+                vtkm::Id v3 = sortID[vid(i+1,j+1,k)  ];
+                vtkm::Id v4 = sortID[vid(i,  j,  k+1)];
+                vtkm::Id v5 = sortID[vid(i+1,j,  k+1)];
+                vtkm::Id v6 = sortID[vid(i,  j+1,k+1)];
+                vtkm::Id v7 = sortID[vid(i+1,j+1,k+1)];
+
+                //result.cubes.push_back(
+                    //{v0,v1,v2,v3,v4,v5,v6,v7});
+                    
+				std::array<vtkm::Id,8> vxs = {v0,v1,v2,v3,v4,v5,v6,v7};
+
+				// Sort array
+				std::sort(vxs.begin(), vxs.end());
+
+				// Push into faces
+				result.cubes.push_back(vxs);
+
+                bool boundary =
+                    (i == 0 || j == 0 || k == 0 ||
+                     i == nx-2 ||
+                     j == ny-2 ||
+                     k == nz-2);
+
+                result.cubeBoundary.push_back(boundary);
+            }
+        }
+    }
+
+    return result;
+}
+
+void static PrintConnectivity(const ConnectivityOutput& c)
+{
+    std::cout << "\n=== EDGES ===\n";
+    for (std::size_t i = 0; i < c.edges.size(); ++i)
+    {
+        std::cout << i << "\t"
+                  << c.edges[i][0] << "\t"
+                  << c.edges[i][1]
+                  << "\t" << int(c.edgeBoundary[i])
+                  << "\n";
+    }
+
+    std::cout << "\n=== FACES ===\n";
+    for (std::size_t i = 0; i < c.faces.size(); ++i)
+    {
+        std::cout << i << "\t"
+                  << c.faces[i][0] << "\t"
+                  << c.faces[i][1] << "\t"
+                  << c.faces[i][2] << "\t"
+                  << c.faces[i][3]
+                  << "\t" << int(c.faceBoundary[i])
+                  << "\n";
+    }
+
+    std::cout << "\n=== CUBES ===\n";
+    for (std::size_t i = 0; i < c.cubes.size(); ++i)
+    {
+        std::cout << i << "\t";
+        for (int v = 0; v < 8; ++v)
+            std::cout << c.cubes[i][v] << "\t";
+
+        std::cout << "\t"
+                  << int(c.cubeBoundary[i]) << "\n";
+    }
+}
+
+
+
+	// 2026-02-13 Betti computation with LU Stars (2004 Pascucci Parallel)
+    void static LUstars(// INPUTS
+                        int numVertices, // in sort order, enough to have the total number, since we start from 0 incrementing by 1 up to N
+                        std::vector<Edge>&              edges,
+                        std::vector<TriangleFace>&      triangles,
+                        std::vector<std::vector<int>>&  tetrahedra,
+                        // OUTPUTS
+                        std::vector<int>& lowerStars,
+                        std::vector<int>& upperStars,
+                        std::vector<int>& deltaBoundary)
+    {
+        // 1. initialise LU, US, dB:
+        lowerStars.resize(numVertices, 1);
+        upperStars.resize(numVertices, 1);
+        deltaBoundary.resize(numVertices, 0);
+
+#if DEBUG_PRINT_PACTBD
+        std::cout << "LU\tUS\tdB:" << std::endl;
+        for(int i = 0; i < numVertices; i++)
+        {
+            std::cout << i << "\t" << lowerStars[i] << "\t" << upperStars[i] << "\t" << deltaBoundary[i] << std::endl;
+        }
+#endif
+
+        // 2. for each edge:
+        int i,j;
+        for(int it = 0; it < edges.size(); it++)
+        {
+            i = edges[it].v0;
+            j = edges[it].v1;
+            if(i < j)
+            {
+                lowerStars[j]--;
+                upperStars[i]--;
+            }
+        }
+
+#if DEBUG_PRINT_PACTBD
+        std::cout << "(Edge)LU\tUS\tdB:" << std::endl;
+        for(int i = 0; i < numVertices; i++)
+        {
+            std::cout << i << "\t" << lowerStars[i] << "\t" << upperStars[i] << "\t" << deltaBoundary[i] << std::endl;
+        }
+#endif
+
+        // 3. for each edge:
+        i=0;
+        j=0;
+        int k;
+        bool b;
+        for(int it = 0; it < triangles.size(); it++)
+        {
+            i = triangles[it].v0;
+            j = triangles[it].v1;
+            k = triangles[it].v2;
+            b = triangles[it].boundary;
+            if ((i < j) && (j < k))
+            {
+                lowerStars[k]++;
+                upperStars[i]++;
+                if (b)
+                {
+                    deltaBoundary[k]--;
+                    deltaBoundary[i]++;
+                }
+            }
+        }
+
+#if DEBUG_PRINT_PACTBD
+        std::cout << "(Triangle)LU\tUS\tdB:" << std::endl;
+        for(int i = 0; i < numVertices; i++)
+        {
+            std::cout << i << "\t" << lowerStars[i] << "\t" << upperStars[i] << "\t" << deltaBoundary[i] << std::endl;
+        }
+#endif
+
+        // 3. for each tetrahedron:
+        i=0;
+        j=0;
+        k=0;
+        int l;
+        for(int it = 0; it < tetrahedra.size(); it++)
+        {
+            i = tetrahedra[it][0];
+            j = tetrahedra[it][1];
+            k = tetrahedra[it][2];
+            l = tetrahedra[it][3];
+
+            if ((i < j) && (j < k) && (k < l))
+            {
+                lowerStars[l]--;
+                upperStars[i]--;
+            }
+        }
+
+#if DEBUG_PRINT_PACTBD
+        std::cout << "(Tet)LU\tUS\tdB:" << std::endl;
+        for(int i = 0; i < numVertices; i++)
+        {
+            std::cout << i << "\t" << lowerStars[i] << "\t" << upperStars[i] << "\t" << deltaBoundary[i] << std::endl;
+        }
+#endif
+
+    }
+
+std::vector<vtkm::Id> static ComputeSortIDStdVector(const vtkm::cont::DataSet& input)
+{
+	std::vector<std::string> sortOrder = {"values", "z", "y", "x"};
+	//std::vector<std::string> sortOrder = {"values", "x", "y", "z"};
+	
+    // Extract the "values" field
+    auto field = input.GetField("values");
+    if (field.GetAssociation() != vtkm::cont::Field::Association::Points)
+        throw std::runtime_error("'values' must be point-associated.");
+
+    vtkm::Id n = field.GetData().GetNumberOfValues();
+    std::vector<vtkm::Id> indices(n);
+    for (vtkm::Id i = 0; i < n; ++i) indices[i] = i;
+
+    auto coordData = input.GetCoordinateSystem().GetData();
+
+    // Cast the values field
+    vtkm::cont::CastAndCall(field.GetData(), [&](const auto& values) {
+        auto valPortal = values.ReadPortal();
+
+        // Cast the coordinate system
+        vtkm::cont::CastAndCall(coordData, [&](const auto& points) {
+            auto ptPortal = points.ReadPortal();
+
+            // Generic comparator
+            auto comparator = [&](vtkm::Id a, vtkm::Id b) {
+                for (const auto& key : sortOrder)
+                {
+                    if (key == "values")
+                    {
+                        auto va = valPortal.Get(a);
+                        auto vb = valPortal.Get(b);
+                        if (va != vb) return va < vb;
+                    }
+                    else if (key == "x")
+                    {
+                        auto pa = ptPortal.Get(a);
+                        auto pb = ptPortal.Get(b);
+                        if (pa[0] != pb[0]) return pa[0] < pb[0];
+                    }
+                    else if (key == "y")
+                    {
+                        auto pa = ptPortal.Get(a);
+                        auto pb = ptPortal.Get(b);
+                        if (pa[1] != pb[1]) return pa[1] < pb[1];
+                    }
+                    else if (key == "z")
+                    {
+                        auto pa = ptPortal.Get(a);
+                        auto pb = ptPortal.Get(b);
+                        if (pa[2] != pb[2]) return pa[2] < pb[2];
+                    }
+                    else
+                    {
+                        throw std::runtime_error("Unknown sort key: " + key);
+                    }
+                }
+                return false; // equal in all keys
+            };
+
+            // Sort indices using the generic comparator
+            std::sort(indices.begin(), indices.end(), comparator);
+        });
+    });
+
+    // Build sortID: oldID -> new sorted position
+    std::vector<vtkm::Id> sortID(n);
+    for (vtkm::Id newPos = 0; newPos < n; ++newPos)
+        sortID[indices[newPos]] = newPos;
+
+    return sortID;
+}
+   
+   
+   // 2025-10-11 COMPUTE BETTI NUMBERS FOR EACH REGULAR BRANCH
+   // BASED ON 2004 Pascucci Parallel Computation of the Topology of Level Sets
+    void static ComputeBettiNumbersForRegularArcs(const vtkm::cont::DataSet& input, // the coefficient-based version additionally requires tetrahedral connections and vertex coordinates
+                                                  const ContourTree& contourTree,
+//                                                  ContourTree& contourTree, // modify the contour tree betti numbers, no longer const
+                                                                            // (but only used for explicitly modifying contourTree.SupernodeBetti)
+                                                  const vtkm::Id nIterations,
+                                                  vtkm::cont::ArrayHandle<Coefficients>& superarcIntrinsicWeightCoeff, // (output)
+                                                  vtkm::cont::ArrayHandle<Coefficients>& superarcDependentWeightCoeff, // (output)
+                                                  vtkm::cont::ArrayHandle<Coefficients>& supernodeTransferWeightCoeff, // (output)
+                                                  vtkm::cont::ArrayHandle<Coefficients>& hyperarcDependentWeightCoeff, // (output)
+                                                  // Added 2025-01-30
+                                                  // We use simple weights for the branch decomposition
+                                                  FloatArrayType& superarcIntrinsicWeight, // (output)
+                                                  FloatArrayType& superarcDependentWeight, // (output)
+                                                  FloatArrayType& supernodeTransferWeight, // (output)
+                                                  FloatArrayType& hyperarcDependentWeight) // (output))
+    { // ComputeBettiNumbersForRegularArcs()
+        std::cout << "[ProcessContourTree.h::ComputeBettiNumbersForRegularArcs] Compute Betti Numbers for each Regular Arc" << std::endl;
+        printMemoryUsage("[ProcessContourTree.h::ComputeVolumeWeightsSerialStructCoefficients] Checkpoint 1/4 - START");
+
+        using TetCellSet = vtkm::cont::CellSetSingleType<>;
+        const auto& unknown = input.GetCellSet();
+        
+        std::vector<vtkm::Id> sortID = ComputeSortIDStdVector(input);
+        
+        ConnectivityOutput cubeConnectivity = ExtractStructuredConnectivity(sortID, input);
+        
+        PrintConnectivity(cubeConnectivity);
+        
+        vtkm::cont::ArrayHandle<ValueType> dataField;
+	    input.GetField("values").GetData().AsArrayHandle(dataField);
+	    auto portal = dataField.ReadPortal();
+	    
+	    std::cout << "@@@@@@@@@@@@@@@@@@@@@" << std::endl;
+	    for(int i = 0; i < portal.GetNumberOfValues(); i++)
+	    {
+			std::cout << i << " " << portal.Get(i) << std::endl;
+		}
+		
+		
+		
+		//auto sortID = ComputeSortIDStdVector(input);
+		std::cout << "@@@@@@@@@@@@@@@@@@@@@" << std::endl;
+		for (vtkm::Id i = 0; i < sortID.size(); ++i)
+		{
+			std::cout << i 
+					  << "\t" 
+					  << sortID[i] << "\n";
+		}
+
+		//auto portalSort = sortID.ReadPortal();
+
+		//for (vtkm::Id i = 0; i < portalSort.GetNumberOfValues(); ++i)
+		//{
+			//std::cout << "Point "
+					  //<< i
+					  //<< " sorted position = "
+					  //<< portalSort.Get(i)
+					  //<< "\n";
+		//}
+
+
+        std::vector<int> lowerStars;
+        std::vector<int> upperStars;
+        std::vector<int> deltaBoundary;
+        
+        // ... 
+        
+        std::cout << "// ComputeBettiNumbersForRegularArcs() finished" << std::endl;
+
+    } // ComputeBettiNumbersForRegularArcs()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
   // routine to compute the volume for each hyperarc and superarc
   void static ComputeVolumeWeightsSerial(const ContourTree& contourTree,
