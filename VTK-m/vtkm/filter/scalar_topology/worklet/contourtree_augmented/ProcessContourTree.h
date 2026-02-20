@@ -90,7 +90,7 @@
 #include <sys/resource.h>
 #include <unistd.h>
 
-#define DEBUG_PRINT_PACTBD 1
+#define DEBUG_PRINT_PACTBD 0
 #define WRITE_FILES 1
 
 
@@ -921,9 +921,9 @@ std::vector<vtkm::Id> static ComputeSortIDStdVector(const vtkm::cont::DataSet& i
         using TetCellSet = vtkm::cont::CellSetSingleType<>;
         const auto& unknown = input.GetCellSet();
         
-        std::vector<vtkm::Id> sortID = ComputeSortIDStdVector(input);
+        std::vector<vtkm::Id> sortIDLookup = ComputeSortIDStdVector(input);
         
-        ConnectivityOutput cubeConnectivity = ExtractStructuredConnectivity(sortID, input);
+        ConnectivityOutput cubeConnectivity = ExtractStructuredConnectivity(sortIDLookup, input);
         
         PrintConnectivity(cubeConnectivity);
         
@@ -942,16 +942,16 @@ std::vector<vtkm::Id> static ComputeSortIDStdVector(const vtkm::cont::DataSet& i
 		
 		
 		
-		//auto sortID = ComputeSortIDStdVector(input);
+		//auto sortIDLookup = ComputeSortIDStdVector(input);
 		std::cout << "@@@@@@@@@@@@@@@@@@@@@" << std::endl;
-		for (vtkm::Id i = 0; i < sortID.size(); ++i)
+		for (vtkm::Id i = 0; i < sortIDLookup.size(); ++i)
 		{
 			std::cout << i 
 					  << "\t" 
-					  << sortID[i] << "\n";
+					  << sortIDLookup[i] << "\n";
 		}
 
-		//auto portalSort = sortID.ReadPortal();
+		//auto portalSort = sortIDLookup.ReadPortal();
 
 		//for (vtkm::Id i = 0; i < portalSort.GetNumberOfValues(); ++i)
 		//{
@@ -1011,13 +1011,31 @@ std::vector<vtkm::Id> static ComputeSortIDStdVector(const vtkm::cont::DataSet& i
         bei.resize(     contourTree.Arcs.GetNumberOfValues(), 0);
         be_ij.resize(   contourTree.Arcs.GetNumberOfValues(), 0);
 
-        for (vtkm::Id sortedNode = 0; sortedNode < contourTree.Arcs.GetNumberOfValues()-1; sortedNode++)
+        for (vtkm::Id sortedNode = 0; sortedNode < contourTree.Arcs.GetNumberOfValues(); sortedNode++)
         {// for each sortedNode
-            vtkm::Id i_sortID = nodesPortal.Get(sortedNode);
+            vtkm::Id i_sortID = nodesPortal.Get(sortedNode); // regular grid implementation does not assume sorted
+            //vtkm::Id i_sortID = sortIDLookup[nodesPortal.Get(sortedNode)];
             vtkm::Id i_superparent = superparentsPortal.Get(i_sortID);
+            //vtkm::Id i_superparent = superparentsPortal.Get(nodesPortal.Get(sortedNode));
 
-            vtkm::Id j_sortID = nodesPortal.Get(sortedNode+1);
-            vtkm::Id j_superparent = superparentsPortal.Get(j_sortID );
+            //vtkm::Id j_sortID = nodesPortal.Get(sortedNode+1);
+            //vtkm::Id j_superparent = superparentsPortal.Get(j_sortID );
+            
+			vtkm::Id j_sortID, j_superparent;
+            
+            if(sortedNode+1 < contourTree.Arcs.GetNumberOfValues())
+            {
+				j_sortID = nodesPortal.Get(sortedNode+1);
+				//j_sortID = sortIDLookup[nodesPortal.Get(sortedNode+1)]; // regular grid implementation does not assume sorted
+				j_superparent = superparentsPortal.Get(j_sortID );		
+				//j_superparent = superparentsPortal.Get(nodesPortal.Get(sortedNode+1) );		
+				
+			}
+            else
+            {
+				j_sortID = vtkm::worklet::contourtree_augmented::NO_SUCH_ELEMENT; //177; //sortedNode+1);
+				j_superparent = vtkm::worklet::contourtree_augmented::NO_SUCH_ELEMENT; //superparentsPortal.Get(j_sortID );				
+			}
 
             vtkm::Id tailend = supernodesPortal.Get(MaskedIndex(superarcsPortal.Get(i_superparent)));
 
@@ -1104,13 +1122,34 @@ std::vector<vtkm::Id> static ComputeSortIDStdVector(const vtkm::cont::DataSet& i
                               << "\t" << "betti0" << "\t" << "betti1" << "\t" << "betti2";//<< std::endl;
 #endif
 
-        for (vtkm::Id sortedNode = 0; sortedNode < contourTree.Arcs.GetNumberOfValues()-1; sortedNode++)
-        {
-            vtkm::Id i_sortID = nodesPortal.Get(sortedNode);
-            vtkm::Id i_superparent = superparentsPortal.Get(i_sortID);
+		std::cout << "regular nodecount: " << nodesPortal.GetNumberOfValues() << std::endl;
+		std::cout << "regular arc-count: " << contourTree.Arcs.GetNumberOfValues() << std::endl;
 
-            vtkm::Id j_sortID = nodesPortal.Get(sortedNode+1);
-            vtkm::Id j_superparent = superparentsPortal.Get(j_sortID );
+
+        for (vtkm::Id sortedNode = 0; sortedNode < contourTree.Arcs.GetNumberOfValues(); sortedNode++)
+        {
+            vtkm::Id i_sortID = nodesPortal.Get(sortedNode); 
+            //vtkm::Id i_sortID = sortIDLookup[nodesPortal.Get(sortedNode)]; // regular grid implementation does not assume sorted
+            vtkm::Id i_superparent = superparentsPortal.Get(i_sortID);
+            //vtkm::Id i_superparent = superparentsPortal.Get(nodesPortal.Get(sortedNode));
+            
+            vtkm::Id j_sortID, j_superparent;
+            
+            if(sortedNode+1 < contourTree.Arcs.GetNumberOfValues())
+            {
+				j_sortID = nodesPortal.Get(sortedNode+1);
+				//j_sortID = sortIDLookup[nodesPortal.Get(sortedNode+1)]; // regular grid implementation does not assume sorted
+				j_superparent = superparentsPortal.Get(j_sortID );		
+				//j_superparent = superparentsPortal.Get(nodesPortal.Get(sortedNode+1) );		
+			}
+            else
+            {
+				j_sortID = vtkm::worklet::contourtree_augmented::NO_SUCH_ELEMENT; //177; //sortedNode+1);
+				j_superparent = vtkm::worklet::contourtree_augmented::NO_SUCH_ELEMENT; //superparentsPortal.Get(j_sortID );				
+			}
+            
+			// 2026-02-16
+            //std::cout << sortedNode << " " << i_sortID << " -> " << sortedNode+1 << " " << j_sortID << std::endl;
 
             vtkm::Id tailend = supernodesPortal.Get(MaskedIndex(superarcsPortal.Get(i_superparent)));
 
@@ -1141,8 +1180,10 @@ std::vector<vtkm::Id> static ComputeSortIDStdVector(const vtkm::cont::DataSet& i
 #endif
 
 
-            //if((betti1 != previous_betti1) && (betti2 != 0))// 2026-01-31 added betti2 border tet check!
-            if((betti1 != previous_betti1) && (betti2 != 0) && (betti1 % 2 == 0))// 2026-01-31 added betti2 border tet check!
+            if((betti1 != previous_betti1) && (betti2 != 0))// 2026-01-31 added betti2 border tet check!
+            //if((betti1 != previous_betti1) && (betti2 != 0) && (betti1 % 2 == 0))// 2026-01-31 added betti2 border tet check!
+            //if((betti1 != previous_betti1) && (betti2 != 0) && (betti1 % 2 == 0) && (previous_betti1 % 2 == 0))// 2026-02-16 added betti1 previous non-1 check!
+            //if((betti1 != previous_betti1) && (betti2 != 0) && (betti1 % 2 == 0))// 2026-02-16 added betti1 previous non-1 check!
             {
                 regular_nodes_to_insert.push_back(i_sortID);
 
@@ -1169,7 +1210,7 @@ std::vector<vtkm::Id> static ComputeSortIDStdVector(const vtkm::cont::DataSet& i
 
             }
             //else 
-            else if (betti1 % 2 == 0)
+            else //if (betti1 % 2 == 0)
             {// if betti number didn't change, but dealing with a supernode ...
              // ... still need to relabel it
                 if(i_sortID == supernodesPortal.Get(i_superparent))
@@ -1606,7 +1647,7 @@ std::vector<vtkm::Id> static ComputeSortIDStdVector(const vtkm::cont::DataSet& i
 
         std::vector<vtkm::Id> newSuperTargets;
 
-#if DEBUG_PRINT_PACTBD
+#if WRITE_FILES
         std::ofstream filebettitable("ContourTreeBetti--BettiTable.txt");
 
         filebettitable << "i"
@@ -1624,11 +1665,14 @@ std::vector<vtkm::Id> static ComputeSortIDStdVector(const vtkm::cont::DataSet& i
                   << std::endl;
 #endif
 
+		std::cout << "total zips: " << zipPortal.GetNumberOfValues() << std::endl;
+
         for (vtkm::Id i = 0; i < zipPortal.GetNumberOfValues(); ++i)
         {
+			std::cout << "processing " << i << "th zip" << std::endl;
+            
             plus1test = false;
             auto triple = zipPortal.Get(i);
-            std::cout << "processing " << i << "th zip" << std::endl;
 
             // Because of nested pairs:
 //            vtkm::Id hyperparent = triple.second.second; //triple.first.first;    // (first of outer pair) -> first of inner pair
@@ -1641,10 +1685,11 @@ std::vector<vtkm::Id> static ComputeSortIDStdVector(const vtkm::cont::DataSet& i
 
             vtkm::Id aug_betti_num   = triple.second.second;   // triple.second.first;         // (second of outer pair) triple.second;
 
-            auto nextTriple = zipPortal.Get(i+1);
-//                vtkm::Id nborHyperparent = nextTriple.first.first;    // (first of outer pair) -> first of inner pair
-//            vtkm::Id nborSuperparent = nextTriple.second.second;    // 2026-01-09 bug found - this is now HP! (first of outer pair) -> first of inner pair 2026-01-03 use SPs
-            vtkm::Id nborSuperparent = nextTriple.first.first;    // (first of outer pair) -> first of inner pair 2026-01-03 use SPs
+            //auto nextTriple = zipPortal.Get(i+1);
+////                vtkm::Id nborHyperparent = nextTriple.first.first;    // (first of outer pair) -> first of inner pair
+////            vtkm::Id nborSuperparent = nextTriple.second.second;    // 2026-01-09 bug found - this is now HP! (first of outer pair) -> first of inner pair 2026-01-03 use SPs
+            //vtkm::Id nborSuperparent = nextTriple.first.first;    // (first of outer pair) -> first of inner pair 2026-01-03 use SPs
+            vtkm::Id nborSuperparent = vtkm::worklet::contourtree_augmented::NO_SUCH_ELEMENT;
 
             // 2026-01-27 track the changes in betti instead of the betti itself, then use it to get the biggest change instead of raw betti1
 //            vtkm::cont::ArrayHandleZip previousTriple;
@@ -1662,6 +1707,12 @@ std::vector<vtkm::Id> static ComputeSortIDStdVector(const vtkm::cont::DataSet& i
             }
             else
             {
+				
+            auto nextTriple = zipPortal.Get(i+1);
+//                vtkm::Id nborHyperparent = nextTriple.first.first;    // (first of outer pair) -> first of inner pair
+//            vtkm::Id nborSuperparent = nextTriple.second.second;    // 2026-01-09 bug found - this is now HP! (first of outer pair) -> first of inner pair 2026-01-03 use SPs
+            nborSuperparent = nextTriple.first.first;    // (first of outer pair) -> first of inner pair 2026-01-03 use SPs				
+				
 //                auto nextTriple = zipPortal.Get(i+1);
 ////                vtkm::Id nborHyperparent = nextTriple.first.first;    // (first of outer pair) -> first of inner pair
 //                vtkm::Id nborSuperparent = nextTriple.second.second;    // (first of outer pair) -> first of inner pair 2026-01-03 use SPs
@@ -1711,7 +1762,7 @@ std::vector<vtkm::Id> static ComputeSortIDStdVector(const vtkm::cont::DataSet& i
 //                new_superID_relabel = (num_original_supernodes-1)+new_nodes_pfix_sum;
 //            }
 
-#if DEBUG_PRINT_PACTBD
+#if WRITE_FILES
             filebettitable << i
                       << "\t" << hyperparent
                       << "\t" << dataflip
@@ -1738,15 +1789,15 @@ std::vector<vtkm::Id> static ComputeSortIDStdVector(const vtkm::cont::DataSet& i
 			std::cout << "ct_betti_portal.size() = " << ct_betti_portal.GetNumberOfValues() << std::endl;
 			std::cout << "ct_BettiOriginalSuperparents_portal.size() = " << ct_BettiOriginalSuperparents_portal.GetNumberOfValues() << std::endl;
 
-            ct_betti_portal.Set(newSuperIDsRelabelled[i], aug_betti_num);
+            ct_betti_portal.Set	(newSuperIDsRelabelled[i], aug_betti_num);
             ct_BettiOriginalSuperparents_portal.Set(newSuperIDsRelabelled[i], superparent);
             
             std::cout << "           " << i << " (m)" << std::endl;
         }
 
-#if DEBUG_PRINT_PACTBD
+#if WRITE_FILES
         filebettitable << "sortID\tregularID\tSP" << std::endl;
-        std::this_thread::sleep_for(std::chrono::seconds(3));
+        //std::this_thread::sleep_for(std::chrono::seconds(3));
 
         for(int sortID = 0; sortID < nodesPortal.GetNumberOfValues(); sortID++)
         {
@@ -2679,6 +2730,68 @@ std::vector<vtkm::Id> static ComputeSortIDStdVector(const vtkm::cont::DataSet& i
       dataField,
       dataFieldIsSorted);
   }
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    // Create branch decomposition from contour tree
+  template <typename T, typename StorageType>
+  static process_contourtree_inc_ns::Branch<T>* ComputeBranchDecomposition(
+    const IdArrayType& contourTreeSuperparents,
+    const IdArrayType& contourTreeSupernodes,
+          const IdArrayType& contourTreeSuperarcs,
+    const IdArrayType& whichBranch,
+    const IdArrayType& branchMinimum,
+    const IdArrayType& branchMaximum,
+    const IdArrayType& branchSaddle,
+    const IdArrayType& branchParent,
+    const IdArrayType& sortOrder,
+          const vtkm::cont::ArrayHandle<T, StorageType>& valueField,
+    const vtkm::cont::ArrayHandle<T, StorageType>& dataField,
+    bool dataFieldIsSorted,
+    const IdArrayType& superarcIntrinsicWeight,
+    const IdArrayType& superarcDependentWeight,            // NEW: passed intrincid
+          const vtkm::Id& contourTreeRootnode,                // NEW: used to get the augmented betti nodes (which are past the root node in index)
+          const IdArrayType& contourTreeSupernodeBetti,       // NEW: added Supernode-Betti number mappings after implementing Betti augmentation
+          std::vector<process_contourtree_inc_ns::Branch<T>*>& branches) // output
+  {
+    std::cout << "ContourTreeApp->(ProcessContourTree)->Branch.h->ComputeBranchDecomposition()" << std::endl;
+    // Branch double-call (Branch function called from here, not just via ctaug_ns::ProcessContourTree::ComputeBranchDecomposition<ValueType>)
+    return process_contourtree_inc_ns::Branch<T>::ComputeBranchDecomposition(
+      contourTreeSuperparents,
+      contourTreeSupernodes,
+                contourTreeSuperarcs,
+      whichBranch,
+      branchMinimum,
+      branchMaximum,
+      branchSaddle,
+      branchParent,
+      sortOrder,
+                valueField,
+      dataField,
+      dataFieldIsSorted,
+      superarcIntrinsicWeight,
+      superarcDependentWeight,
+                contourTreeRootnode,
+                contourTreeSupernodeBetti,
+                branches);
+  }
+  
+  
+  
+  
+  
+  
+  
+  
 
   // routine to compute the branch decomposition by volume
   void static ComputeVolumeBranchDecomposition(const ContourTree& contourTree,

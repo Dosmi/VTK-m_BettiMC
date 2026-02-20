@@ -109,6 +109,10 @@ using BranchType = vtkm::worklet::contourtree_augmented::process_contourtree_inc
 namespace ctaug_ns = vtkm::worklet::contourtree_augmented;
 using Coefficients = vtkm::worklet::contourtree_augmented::Coefficients;
 
+#define DEBUG_PRINT_PACTBD 0
+#define SLEEP_ON 0
+#define WRITE_FILES 1
+
 // Simple helper class for parsing the command line options
 class ParseCL
 {
@@ -286,6 +290,11 @@ int main(int argc, char* argv[])
     const std::string ORANGE = "\033[38;2;255;165;0m";  // Start red text
     const std::string YELLOW = "\033[38;2;240;240;13m";  // Warm, readable yellow
     const std::string RESET = "\033[0m"; // End red text
+    
+    
+#if WRITE_FILES
+    int file_io_counter = 0;
+#endif
 	
 	
 #ifdef WITH_MPI
@@ -977,6 +986,7 @@ int main(int argc, char* argv[])
 
     std::cout << "... Computing the Branch Decomposition: LOGGING DONE\n";
     std::cout << "num. of branches: " << branchSaddle.GetNumberOfValues() << std::endl;
+    std::cout << "numLevels: " << numLevels << std::endl;
 
     //----main branch decompostion end
     //----Isovalue seleciton start
@@ -988,19 +998,24 @@ int main(int argc, char* argv[])
       result.GetPartitions()[0].GetField("values").GetData().AsArrayHandle(dataField);
       bool dataFieldIsSorted = true;
 #else
-//      useDataSet.GetField("values").GetData().AsArrayHandle(dataField);
-//      bool dataFieldIsSorted = false;
+vtkm::cont::ArrayHandle<float> dataField; //= useDataSet.GetField("values").GetData();//.AsArrayHandle();
+      useDataSet.GetField("values").GetData().AsArrayHandle(dataField);
+      bool dataFieldIsSorted = false;
 
-      bool dataFieldIsSorted = true;
+      //bool dataFieldIsSorted = true;
 
       std::vector<float> std_nodes_sorted;
-      for(float i = 0.f; i < 29791.f; i += 1.f)
+      //for(float i = 0.f; i < 29791.f; i += 1.f)
+      for(float i = 0.f; i < 125.f; i += 1.f)
+      //for(float i = 0.f; i < 13,825.f; i += 1.f)
       {
         std_nodes_sorted.push_back(i);
       }
 
-      vtkm::cont::ArrayHandle<float> dataField =
-        vtkm::cont::make_ArrayHandle(std_nodes_sorted, vtkm::CopyFlag::Off);
+      //vtkm::cont::ArrayHandle<float> dataField =
+        //vtkm::cont::make_ArrayHandle(std_nodes_sorted, vtkm::CopyFlag::Off);
+        
+        //vtkm::cont::ArrayHandle<ValueType> dataField =  vtkm::cont::make_ArrayHandle(std_nodes_sorted, vtkm::CopyFlag::Off);
 
       for(unsigned i = 0; i < dataField.GetNumberOfValues(); i++)
       {
@@ -1015,27 +1030,154 @@ int main(int argc, char* argv[])
 
       std::cout << "... Computing the Branch Decomposition: create explicit representation of the branch decompostion from the array representation\n";
 
-      // create explicit representation of the branch decompostion from the array representation
+      //// create explicit representation of the branch decompostion from the array representation
+      //BranchType* branchDecompostionRoot =
+        //ctaug_ns::ProcessContourTree::ComputeBranchDecomposition<ValueType>(
+          //filter.GetContourTree().Superparents,
+          //filter.GetContourTree().Supernodes,
+          //whichBranch,
+          //branchMinimum,
+          //branchMaximum,
+          //branchSaddle,
+          //branchParent,
+          //filter.GetSortOrder(),
+          //dataField,
+          //dataFieldIsSorted);
+          
+          
+          
+          
+          
+          
+          
+	  
+#if WRITE_FILES
+
+    auto whichBranchPortal   = whichBranch.ReadPortal();
+    auto branchMinimumPortal = branchMinimum.ReadPortal();
+    auto branchMaximumPortal = branchMaximum.ReadPortal();
+    auto branchSaddlePortal  = branchSaddle.ReadPortal();
+    auto branchParentPortal  = branchParent.ReadPortal();
+
+    std::cout << "(ContourTreeApp.cxx) Printing the arrays output from the Branch Decomposition to 'ContourTreeGraph--original-fullCT-BRANCH-COLLAPSED.txt'" << std::endl;
+    std::cout << "(ContourTreeApp.cxx) whichBranch:";
+
+    std::ofstream file("ContourTreeGraph--original-fullCT-SN-TO-BRANCH-COLLAPSED.txt");
+
+    for (vtkm::Id branchID = 0; branchID < whichBranch.GetNumberOfValues(); branchID++)
+    {
+        // std::cout << branchID << " = " << whichBranchPortal.Get(branchID) << std::endl;
+        file << branchID << "," << whichBranchPortal.Get(branchID) << std::endl;
+    }
+    file.close();
+#endif
+
+
+
+
+
+
+
+	  
+	  
+	std::cout << YELLOW << "\n[STAGE 4.3 Start - Explicit Branch Decomposition Aggregate Volume Weights] ctaug_ns::ProcessContourTree::ComputeBranchDecomposition<ValueType>() START ..." << RESET << std::endl;
+
+      std::cout << "(ContourTreeApp.cxx) -Branch.h->ComputeBranchDecomposition " << std::endl;
+      std::cout << "(ContourTreeApp)->ProcessContourTree->Branch.h->ComputeBranchDecomposition()" << std::endl;
+
+      const vtkm::Id root = filter.GetContourTree().Rootnode;//9; // hack-resolved
+
+      vtkm::Id nBranches = branchSaddle.GetNumberOfValues();
+      std::vector<BranchType*> branches;
+      branches.reserve(static_cast<std::size_t>(nBranches));
+      
+		auto valueField = useDataSet.GetPointField("values")
+							.GetDataAsDefaultFloat()
+							.AsArrayHandle<vtkm::cont::ArrayHandle<ValueType>>(); 
+
+
       BranchType* branchDecompostionRoot =
-        ctaug_ns::ProcessContourTree::ComputeBranchDecomposition<ValueType>(
-          filter.GetContourTree().Superparents,
-          filter.GetContourTree().Supernodes,
-          whichBranch,
-          branchMinimum,
-          branchMaximum,
-          branchSaddle,
-          branchParent,
-          filter.GetSortOrder(),
-          dataField,
-          dataFieldIsSorted);
+          ctaug_ns::ProcessContourTree::ComputeBranchDecomposition<ValueType>(
+            filter.GetContourTree().Superparents,
+            filter.GetContourTree().Supernodes,
+            filter.GetContourTree().Superarcs,
+            whichBranch,
+            branchMinimum,
+            branchMaximum,
+            branchSaddle,
+            branchParent,
+            filter.GetSortOrder(),
+                  //useDataSet.GetPointField("values").GetDataAsDefaultFloat().AsArrayHandle<vtkm::cont::ArrayHandle<vtkm::FloatDefault>>(),
+                  valueField,
+            dataField, //, use sort indices
+            dataFieldIsSorted,
+            //superarcIntrinsicWeightNEW,   // used to use manually set values for BD: superarcIntrinsicWeightCorrect,
+            //superarcDependentWeightNEW,   // used to use manually set values for BD: superarcDependentWeightCorrect );
+            superarcIntrinsicWeight,
+            superarcDependentWeight,
+                root,
+                filter.GetContourTree().SupernodeBetti, // used to get the augmented betti nodes (which are past the root node in index)
+                  branches); // output
 
-      std::cout << "... Computing the Branch Decomposition: PRINTING\n";
-      branchDecompostionRoot->PrintBranchDecomposition(std::cout);
+      // The preceding is taken from ProcessContourTree.h and hardcoded here for testing
+      std::cout << "(ContourTreeApp)->ProcessContourTree->Branch.h->ComputeBranchDecomposition()" << std::endl;
+      std::cout << YELLOW << "[STAGE 4.3 End - Explicit Branch Decomposition Aggregate Volume Weights] ctaug_ns::ProcessContourTree::ComputeBranchDecomposition<ValueType>() ... END\n" << RESET << std::endl;
 
-//      std::ofstream filegvbdfull("ContourTreeGraph-13k-branch-decomposition-fullCT.txt");
-      std::ofstream filegvbdfull("ContourTreeGraph-56M-branch-decomposition-fullCT.txt");
+	  
+	  
+	  
+	  
+	  
+	  
+	  
+//#if WRITE_FILES
+//std::cout << "(ContourTreeApp) PRINTING DOT FORMAT: The Branch Decomposition:\n";
+//// FILE IO START
+      //file_io_counter++;
+      //VTKM_LOG_S(vtkm::cont::LogLevel::Warn, //Info,
+                 //std::endl
+                   //<< file_io_counter << ") WRITING: (PrintDot) ContourTreeGraph--branch-decomposition-fullCT.gv" << std::endl);
+      //std::vector<vtkm::Id> saddle_rootingFullBD = std::vector<vtkm::Id>();
+      //std::vector<vtkm::Id> local_branchesFullBD = std::vector<vtkm::Id>();
+      //std::vector<vtkm::Id> depth_FullBD = std::vector<vtkm::Id>();
+      //std::vector<vtkm::FloatDefault>    branch_weightsFullBD = std::vector<vtkm::FloatDefault>();
+      //std::vector<vtkm::FloatDefault>    branch_weights_write_FullBD = std::vector<vtkm::FloatDefault>();
+      //std::vector<bool>     main_branch_flags_FullBD = std::vector<bool>();
+      //std::vector<vtkm::Id> depth_write_FullBD = std::vector<vtkm::Id>();
 
+
+      //std::ofstream filegvbdfullBD("ContourTreeGraph--branch-decomposition-fullCT.gv");
+      //branchDecompostionRoot->PrintDotBranchDecomposition(useDataSet, filegvbdfullBD, saddle_rootingFullBD, local_branchesFullBD,
+                                                          //depth_FullBD, branch_weightsFullBD, branch_weights_write_FullBD,
+                                                          //main_branch_flags_FullBD, depth_write_FullBD, 0, 0);
+//// FILE IO END
+//#endif
+
+
+#if WRITE_FILES
+// FILE IO START
+      file_io_counter++;
+            VTKM_LOG_S(vtkm::cont::LogLevel::Warn, //Info,
+                       std::endl
+                         << file_io_counter << ") WRITING: (PrintBranch) ContourTreeGraph--branch-decomposition-fullCT.txt" << std::endl);
+      std::ofstream filegvbdfull("ContourTreeGraph--branch-decomposition-fullCT.txt");
       branchDecompostionRoot->PrintBranchDecomposition(filegvbdfull);
+// FILE IO END
+#endif
+	  
+	  
+	  
+	  
+	  
+	  
+
+      //std::cout << "... Computing the Branch Decomposition: PRINTING\n";
+      //branchDecompostionRoot->PrintBranchDecomposition(std::cout);
+
+////      std::ofstream filegvbdfull("ContourTreeGraph-13k-branch-decomposition-fullCT.txt");
+      //std::ofstream filegvbdfull("ContourTreeGraph-56M-branch-decomposition-fullCT.txt");
+
+      //branchDecompostionRoot->PrintBranchDecomposition(filegvbdfull);
 
 #ifdef DEBUG_PRINT
       branchDecompostionRoot->PrintBranchDecomposition(std::cout);
@@ -1043,7 +1185,7 @@ int main(int argc, char* argv[])
 
       // Simplify the contour tree of the branch decompostion
 //      branchDecompostionRoot->SimplifyToSize(numComp, usePersistenceSorter);
-      branchDecompostionRoot->SimplifyToSize(12, usePersistenceSorter);
+      branchDecompostionRoot->SimplifyToSize(10, usePersistenceSorter);
       std::cout << "... Computing the Branch Decomposition: PRINTING AFTER SIMPLIFICATION\n";
       branchDecompostionRoot->PrintBranchDecomposition(std::cout);
 
@@ -1111,6 +1253,7 @@ int main(int argc, char* argv[])
   if (rank == 0 && printContourTree)
   {
     std::cout << "FINISHED Contour Tree" << std::endl;
+    std::cout << "Contour Tree Rootnode:" << filter.GetContourTree().Rootnode << std::endl;
     std::cout << "============" << std::endl;
     ctaug_ns::EdgePairArray saddlePeak;
     ctaug_ns::ProcessContourTree::CollectSortedSuperarcs(
@@ -1130,14 +1273,14 @@ int main(int argc, char* argv[])
 //      std::ofstream file("ContourTreeGraph-cleanedup-parcels-LT2M-PACT.gv");
 //      std::ofstream file("ContourTreeGraph-29K-branch-decomposition-fullCT-ColumnFormat.txt");
 
-//      std::ofstream file("ContourTreeGraph-13k-original-fullCT-ColumnFormat.txt");
-      std::ofstream file("ContourTreeGraph-56M-original-fullCT-ColumnFormat.txt");
-    if (file.is_open()) {
-        ctaug_ns::PrintEdgePairArrayColumnLayout(saddlePeak, file);
-        file.close(); // Make sure to close the file when done
-    } else {
-        std::cerr << "Unable to open file for writing.\n";
-    }
+////      std::ofstream file("ContourTreeGraph-13k-original-fullCT-ColumnFormat.txt");
+      //std::ofstream file("ContourTreeGraph--original-fullCT-ColumnFormat.txt");
+    //if (file.is_open()) {
+        //ctaug_ns::PrintEdgePairArrayColumnLayout(saddlePeak, file);
+        //file.close(); // Make sure to close the file when done
+    //} else {
+        //std::cerr << "Unable to open file for writing.\n";
+    //}
 
     std::cout << "Saving the Contour Tree As Dot GraphViz File .gv" << std::endl;
 //    std::ofstream filegv("ContourTreeGraph-270985-parcels-128x2M-D3d.gv");
@@ -1152,12 +1295,46 @@ int main(int argc, char* argv[])
 //    std::ofstream filegv("ContourTreeGraph-29K-branch-decomposition-fullCT.gv");
 
 //    std::ofstream filegv("ContourTreeGraph-13k-original-fullCT.gv");
-    std::ofstream filegv("ContourTreeGraph-56M-original-fullCT.gv");
+    //std::ofstream filegv("ContourTreeGraph-56M-original-fullCT.gv");
 
-    filter.GetContourTree().PrintDotSuperStructure(filegv);
+    //filter.GetContourTree().PrintDotSuperStructure(filegv);
 
 //    std::ofstream filegv("ContourTreeGraph-branch-decomposition-LT2M-PACT.gv");
 //    branchDecompostionRoot->PrintBranchDecomposition(std::cout);
+
+#if WRITE_FILES
+// FILE IO START
+    file_io_counter++;
+    VTKM_LOG_S(vtkm::cont::LogLevel::Warn, //Info,
+               std::endl
+                 << file_io_counter << ") WRITING: ContourTreeGraph--original-fullCT-ColumnFormat.txt" << std::endl);
+
+    std::ofstream file("ContourTreeGraph--original-fullCT-ColumnFormat.txt");
+
+
+    if (file.is_open()) {
+        ctaug_ns::PrintEdgePairArrayColumnLayout(saddlePeak, file);
+        file.close(); // Make sure to close the file when done
+    } else {
+        std::cerr << "Unable to open file for writing.\n";
+    }
+// FILE IO END
+#endif
+
+
+#if WRITE_FILES
+// FILE IO START
+    file_io_counter++;
+          VTKM_LOG_S(vtkm::cont::LogLevel::Warn, //Info,
+                     std::endl
+                       << file_io_counter << ") WRITING: ContourTreeGraph--original-fullCT.gv" << std::endl);
+
+    std::cout << "Saving the Contour Tree As Dot GraphViz File .gv" << std::endl;
+    std::ofstream filegv("ContourTreeGraph--original-fullCT.gv");
+    filter.GetContourTree().PrintDotSuperStructure(filegv);
+    std::cout << " Finished PrintDotSuperStructure " << std::endl;
+// FILE IO END
+#endif
 
   }
 
