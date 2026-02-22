@@ -53,6 +53,9 @@
 #include <vtkm/filter/scalar_topology/worklet/contourtree_augmented/processcontourtree/Branch.h>
 #include <vtkm/filter/scalar_topology/worklet/contourtree_augmented/processcontourtree/SetTriangleSuperarcId.h>
 
+using BranchType = vtkm::worklet::contourtree_augmented::process_contourtree_inc::Branch<ValueType>;
+using Coefficients = vtkm::worklet::contourtree_augmented::Coefficients;
+
 
 using namespace std;
 using namespace vtkm;
@@ -69,6 +72,12 @@ vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(v
     // debug >= 1, print what is being currently computed with timings
     // debug >= 2, print contour tree arrays and isosurfac triangles
     int debugLevel = 1;
+    
+	// Red text formatting for highlighting some console output:
+    const std::string RED = "\033[31m";  // Start red text
+    const std::string ORANGE = "\033[38;2;255;165;0m";  // Start red text
+    const std::string YELLOW = "\033[38;2;240;240;13m";  // Warm, readable yellow
+    const std::string RESET = "\033[0m"; // End red text
 
     //
     // Compute Contour Tree
@@ -82,6 +91,7 @@ vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(v
     timer.Start();
 
     worklet::contourtree_augmented::ContourTree ct;
+    worklet::contourtree_augmented::ContourTree ctBetti;
     vtkm::cont::ArrayHandle<vtkm::Id> ctSortOrder;
     vtkm::cont::ArrayHandle<vtkm::Id> ctSortIndices;
     Id ctNumIterations;
@@ -115,9 +125,107 @@ vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(v
     cont::ArrayHandle<Id> superarcDependentWeight;
     cont::ArrayHandle<Id> supernodeTransferWeight;
     cont::ArrayHandle<Id> hyperarcDependentWeigh;
+    
+	// ================================================= BettiMC (from PACT-BD) ================================================= //
+
+    // Floating point type weights are required for PACT-BD
+    FloatArrayType superarcIntrinsicWeightNEW;
+    FloatArrayType superarcDependentWeightNEW;
+    FloatArrayType supernodeTransferWeightNEW;
+    FloatArrayType hyperarcDependentWeightNEW;
+
+    BranchType* branchDecompostionRoot; // for traversing additional Betti number information
+    std::vector<BranchType*> branches;
+    std::vector<BranchType*> branchesBetti;
 
     if ("volume" == decompositionType)
     {
+		
+		using ValueType = vtkm::Float32;
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+	int compute_betti = 1;
+	ctBetti = ct;
+	
+	const vtkm::Id originalRoot = ct.Rootnode;
+
+	if (compute_betti)
+	{
+	  // Time branch decompostion: Volume Weight Computation:
+	  vtkm::cont::Timer computeVolumeWeightsTimeDisplay;
+	  computeVolumeWeightsTimeDisplay.Start();
+
+	  // ---------------------------- FLOAT WEIGHTS ---------------------------- //
+
+	  vtkm::cont::ArrayHandle<vtkm::Float32> superarcIntrinsicBetti;
+	  vtkm::cont::ArrayHandle<vtkm::Float32> superarcDependentBetti;
+	  vtkm::cont::ArrayHandle<vtkm::Float32> supernodeTransferBetti;
+	  vtkm::cont::ArrayHandle<vtkm::Float32> hyperarcDependentBetti;
+
+	  vtkm::cont::ArrayHandle<Coefficients> superarcIntrinsicWeightBetti;
+	  vtkm::cont::ArrayHandle<Coefficients> superarcDependentWeightBetti;
+	  vtkm::cont::ArrayHandle<Coefficients> supernodeTransferWeightBetti;
+	  vtkm::cont::ArrayHandle<Coefficients> hyperarcDependentWeightBetti;
+
+
+	  std::cout << YELLOW << "\n[STAGE 3.5 Start - Coeff. Weights (IDThD)] ContourTreeApp.cxx:ComputeVolumeWeightsSerialStructCoefficients START ..." << RESET << std::endl;
+	  
+	  using ValueType = vtkm::Float32;
+
+	  //    CALLGRIND_START_INSTRUMENTATION;
+	  worklet::contourtree_augmented::ProcessContourTree::ComputeBettiNumbersForRegularArcs(inputData,
+																	  //ct,
+																	  ctBetti, // compute Betti numbers on a duplicate tree, then reuse the ct branch decomp
+																	  ctNumIterations,
+																	  // The following four outputs are the coefficient tuples
+																	  // (such as h1, h2, h3, h4 pairs)
+																	  superarcIntrinsicWeightBetti,  // (output)
+																	  superarcDependentWeightBetti,  // (output)
+																	  supernodeTransferWeightBetti,  // (output)
+																	  hyperarcDependentWeightBetti,
+																	  // 2025-01-30 added additional output ...
+																	  // ... to have access to "collapsed" TODO termdefine
+																	  // ("collapsed" = computed single value weight, ...
+																	  //  ... instead of N-length coefficient tuples)
+																	  // These "collapsed" weights are used for ...
+																	  // ... computing branch weights without relying on ...
+																	  // ... the node count on the branches
+																	  superarcIntrinsicBetti,  // (output)
+																	  superarcDependentBetti,  // (output)
+																	  supernodeTransferBetti,  // (output)
+																	  hyperarcDependentBetti); // (output)
+
+	  //    CALLGRIND_STOP_INSTRUMENTATION;
+	  //    CALLGRIND_DUMP_STATS;
+
+	  std::cout << YELLOW << "[STAGE 3.5 End - Coeff. Weights (IDThD)] ContourTreeApp.cxx:ComputeVolumeWeightsSerialStructCoefficients ... END\n" << RESET << std::endl;
+
+	}
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
         std::cout << "Branch Weights Chosen: VOLUME" << std::endl;
         worklet::contourtree_augmented::ProcessContourTree::ComputeVolumeWeightsSerial(
                 ct,
@@ -138,6 +246,256 @@ vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(v
                 branchSaddle,
                 branchParent
                 );
+                
+		auto valueField = inputData.GetPointField("values")
+							//.GetDataAsDefaultFloat()
+							.GetDataAsDefaultFloat()
+							.AsArrayHandle<vtkm::cont::ArrayHandle<float>>();
+							
+		vtkm::cont::ArrayHandle<float> dataField; //= useDataSet.GetField("values").GetData();//.AsArrayHandle();
+		inputData.GetField("values").GetDataAsDefaultFloat().AsArrayHandle(dataField); 
+		
+		bool dataFieldIsSorted = false;
+		
+        vtkm::Id nBranches = branchSaddle.GetNumberOfValues();
+        // branches array defined above
+        branches.reserve(static_cast<std::size_t>(nBranches));
+                
+		//BranchType* branchDecompostionRoot = defined above
+		branchDecompostionRoot =
+			  worklet::contourtree_augmented::ProcessContourTree::ComputeBranchDecomposition<ValueType>(
+				ct.Superparents,
+				ct.Supernodes,
+				ct.Superarcs,
+				whichBranch,
+				branchMinimum,
+				branchMaximum,
+				branchSaddle,
+				branchParent,
+				ctSortOrder,
+					  //useDataSet.GetPointField("values").GetDataAsDefaultFloat().AsArrayHandle<vtkm::cont::ArrayHandle<vtkm::FloatDefault>>(),
+					  valueField,
+				dataField, //, use sort indices
+				dataFieldIsSorted,
+				//superarcIntrinsicWeightNEW,   // used to use manually set values for BD: superarcIntrinsicWeightCorrect,
+				//superarcDependentWeightNEW,   // used to use manually set values for BD: superarcDependentWeightCorrect );
+				superarcIntrinsicWeight,
+				superarcDependentWeight,
+					ct.Rootnode,
+					ct.SupernodeBetti, // used to get the augmented betti nodes (which are past the root node in index)
+					  branches); // output
+					  
+					  
+		        //std::vector<ValueType> originalBranchVolumeFloats;
+		        std::vector<vtkm::Id> originalBranchVolumeFloats;
+        originalBranchVolumeFloats.resize(branches.size());
+
+        std::ofstream filebranchvolumes("ContourTreeBranches--BranchVolumes-NoBetti.txt");
+        for(int i = 0; i < branches.size(); i++)
+        {
+            originalBranchVolumeFloats[i] = branches[i]->Volume;
+            filebranchvolumes << i << "\t" << branches[i]->Volume << std::endl;
+        }
+
+
+        std::cout << "ct.root = " << ct.Rootnode << " ctBetti.root = " << ctBetti.Rootnode << " original.root = " << originalRoot << std::endl;
+        std::cout << "whichBranch.size() = " << whichBranch.GetNumberOfValues()
+                  << " branchSaddle.size() = " << branchSaddle.GetNumberOfValues() << std::endl;
+        std::cout << "ctBetti.SupernodeBetti.size() = " << ctBetti.SupernodeBetti.GetNumberOfValues() << std::endl;
+//        std::this_thread::sleep_for(std::chrono::seconds(3));
+
+        if (compute_betti)
+        {
+            cont::ArrayHandle<Id> bt_superarcIntrinsicWeightNEW;
+            cont::ArrayHandle<Id> bt_superarcDependentWeightNEW;
+            cont::ArrayHandle<Id> bt_supernodeTransferWeightNEW;
+            cont::ArrayHandle<Id> bt_hyperarcDependentWeightNEW;
+
+            vtkm::cont::ArrayHandle<Coefficients> bt_superarcIntrinsicWeightCoeffs;
+            vtkm::cont::ArrayHandle<Coefficients> bt_superarcDependentWeightCoeffs;
+            vtkm::cont::ArrayHandle<Coefficients> bt_supernodeTransferWeightCoeffs;
+            vtkm::cont::ArrayHandle<Coefficients> bt_hyperarcDependentWeightCoeffs;
+            
+			worklet::contourtree_augmented::ProcessContourTree::ComputeVolumeWeightsSerial(ctBetti,
+																							ctNumIterations,
+                                                                                      bt_superarcIntrinsicWeightNEW,  // (output)
+                                                                                      bt_superarcDependentWeightNEW,  // (output)
+                                                                                      bt_supernodeTransferWeightNEW,  // (output)
+                                                                                      bt_hyperarcDependentWeightNEW); // (output)
+
+            //worklet::contourtree_augmented::ProcessContourTree::ComputeVolumeWeightsSerialStructCoefficients(inputData,
+                                                                                      //ctBetti,
+                                                                                      //ctNumIterations,
+                                                                                      //// The following four outputs are the coefficient tuples
+                                                                                      //// (such as h1, h2, h3, h4 pairs)
+                                                                                      //bt_superarcIntrinsicWeightCoeffs,  // (output)
+                                                                                      //bt_superarcDependentWeightCoeffs,  // (output)
+                                                                                      //bt_supernodeTransferWeightCoeffs,  // (output)
+                                                                                      //bt_hyperarcDependentWeightCoeffs,
+                                                                                      //// 2025-01-30 added additional output ...
+                                                                                      //// ... to have access to "collapsed" TODO termdefine
+                                                                                      //// ("collapsed" = computed single value weight, ...
+                                                                                      ////  ... instead of N-length coefficient tuples)
+                                                                                      //// These "collapsed" weights are used for ...
+                                                                                      //// ... computing branch weights without relying on ...
+                                                                                      //// ... the node count on the branches
+                                                                                      //bt_superarcIntrinsicWeightNEW,  // (output)
+                                                                                      //bt_superarcDependentWeightNEW,  // (output)
+                                                                                      //bt_supernodeTransferWeightNEW,  // (output)
+                                                                                      //bt_hyperarcDependentWeightNEW); // (output)
+
+
+
+            cont::ArrayHandle<vtkm::Id> bt_whichBranch;
+            cont::ArrayHandle<vtkm::Id> bt_branchMinimum;
+            cont::ArrayHandle<vtkm::Id> bt_branchMaximum;
+            cont::ArrayHandle<vtkm::Id> bt_branchSaddle;
+            cont::ArrayHandle<vtkm::Id> bt_branchParent;
+
+            //worklet::contourtree_augmented::ProcessContourTree::ComputeVolumeBranchDecompositionSerialFloat(ctBetti,
+                                                                                      //bt_superarcDependentWeightNEW,
+                                                                                      //bt_superarcIntrinsicWeightNEW,
+                                                                                      //bt_whichBranch,   // (output)
+                                                                                      //bt_branchMinimum, // (output)
+                                                                                      //bt_branchMaximum, // (output)
+                                                                                      //bt_branchSaddle,  // (output)
+                                                                                      //bt_branchParent); // (output)
+                                                                                      
+			worklet::contourtree_augmented::ProcessContourTree::ComputeVolumeBranchDecompositionSerial(ctBetti,
+                                                                                      bt_superarcDependentWeightNEW,
+                                                                                      bt_superarcIntrinsicWeightNEW,
+                                                                                      bt_whichBranch,   // (output)
+                                                                                      bt_branchMinimum, // (output)
+                                                                                      bt_branchMaximum, // (output)
+                                                                                      bt_branchSaddle,  // (output)
+                                                                                      bt_branchParent); // (output)
+
+            std::cout << "bt_whichBranch.size() = " << bt_whichBranch.GetNumberOfValues() << std::endl;
+//            std::this_thread::sleep_for(std::chrono::seconds(3));
+
+
+
+
+
+
+
+            auto ctBetti_BettiOriginalSuperparents_portal = ctBetti.BettiOriginalSuperparents.ReadPortal();
+
+            auto bt_whichBranchPortal = bt_whichBranch.WritePortal();
+            auto whichBranchPortal = whichBranch.WritePortal();
+
+//#if WRITE_FILES
+            std::ofstream file1("ContourTreeGraph--original-fullCT-SN-TO-BRANCH-COLLAPSED.txt");
+
+            for (vtkm::Id branchID = 0; branchID < whichBranch.GetNumberOfValues(); branchID++)
+            {
+                // std::cout << branchID << " = " << whichBranchPortal.Get(branchID) << std::endl;
+                file1 << branchID << "," << whichBranchPortal.Get(branchID) << std::endl;
+            }
+            file1.close();
+//#endif
+
+//            for(int i = 0; i < whichBranch.GetNumberOfValues(); i++)
+            for(int i = 0; i < bt_whichBranch.GetNumberOfValues(); i++)
+            {
+                if(i < originalRoot)
+                {
+//                    bt_whichBranch[i] = whichBranch[i];
+                    bt_whichBranchPortal.Set(i, whichBranchPortal.Get(i));
+
+                }
+                else
+                {
+//                    bt_whichBranch[i] = whichBranch[ctBetti_BettiOriginalSuperparents_portal[i]];
+                    bt_whichBranchPortal.Set(i, whichBranchPortal.Get(ctBetti_BettiOriginalSuperparents_portal.Get(i)));
+                }
+            }
+
+            whichBranch.Allocate(bt_whichBranch.GetNumberOfValues());
+            auto whichBranchPortalModified = whichBranch.WritePortal();
+
+            for(int i = 0; i < bt_whichBranch.GetNumberOfValues(); i++)
+            {
+                whichBranchPortalModified.Set(i, bt_whichBranchPortal.Get(i));
+            }
+
+//#if WRITE_FILES
+            std::ofstream file("ContourTreeGraph--Betti-fullCT-SN-TO-BRANCH-COLLAPSED.txt");
+
+            for (vtkm::Id branchID = 0; branchID < whichBranch.GetNumberOfValues(); branchID++)
+            {
+                // std::cout << branchID << " = " << whichBranchPortal.Get(branchID) << std::endl;
+                file << branchID << "," << whichBranchPortalModified.Get(branchID) << std::endl;
+            }
+            file.close();
+//#endif
+
+
+
+
+
+
+
+
+
+
+            branches.clear();
+
+            branchDecompostionRoot =
+                worklet::contourtree_augmented::ProcessContourTree::ComputeBranchDecomposition<ValueType>(
+                        ctBetti.Superparents,   // contourTreeSuperparents
+                        ctBetti.Supernodes,     // contourTreeSupernodes
+                        ctBetti.Superarcs,      // contourTreeSuperarcs
+                  whichBranch,               // whichBranch
+//                        bt_whichBranch,               // whichBranch
+                  branchMinimum,             // branchMinimum
+                  branchMaximum,             // branchMaximum
+                  branchSaddle,              // branchSaddle
+                  branchParent,              // branchParent
+                  ctSortOrder,                  // sortOrder
+                  /* valueField */      inputData.GetPointField("values").GetDataAsDefaultFloat().AsArrayHandle<vtkm::cont::ArrayHandle<vtkm::FloatDefault>>(),
+    //                    input_var,
+                  dataField, //, use sort indices
+                  dataFieldIsSorted,
+                  bt_superarcIntrinsicWeightNEW,   // used to use manually set values for BD: superarcIntrinsicWeightCorrect,
+                  bt_superarcDependentWeightNEW,   // used to use manually set values for BD: superarcDependentWeightCorrect );
+                      ctBetti.Rootnode,
+    //                  ct.SupernodeBetti,       // used to get the augmented betti nodes (which are past the root node in index)
+                      ctBetti.SupernodeBetti,       // used to get the augmented betti nodes (which are past the root node in index)
+                        branches); // output
+//            branchesBetti); // output
+
+            // overwrite branch volumes, since those can be nonsensical thanks to high floating point sensitivity
+            //for (int i = 0; i < branchesBetti.size(); i++) // bug from PACT?
+            for (int i = 0; i < branches.size(); i++)
+            {
+                branches[i]->Volume = originalBranchVolumeFloats[i];
+            }
+
+
+
+            ct = ctBetti;
+//            whichBranch = bt_whichBranch;
+
+        }			  
+					  
+					  
+					  
+					  
+					  
+					  
+					  
+					  
+					  
+					  
+					  
+					  
+					  
+					  
+					  
+					  
+					  
+					  
 
     }
     else if("height" == decompositionType)
@@ -149,6 +507,7 @@ vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(v
         worklet::contourtree_augmented::ProcessContourTree::ComputeHeightBranchDecomposition(
                 ct,
                 inputData.GetField(fieldName).GetData().AsArrayHandle<cont::ArrayHandle<Float64>>(),
+                //inputData.GetField(fieldName).GetData().AsArrayHandle<cont::ArrayHandle<FloatDefault>>(),
                 ctSortOrder,
                 ctNumIterations,
                 whichBranch,
@@ -246,7 +605,8 @@ vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(v
     // Build the mesh
     vtkm::Id3 pointDimensions = inputData.GetCellSet().AsCellSet<vtkm::cont::CellSetStructured<3>>().GetPointDimensions();
     worklet::contourtree_augmented::DataSetMeshTriangulation3DMarchingCubes mesh(vtkm::Id3(pointDimensions[0], pointDimensions[1], pointDimensions[2]));
-    mesh.SortData(inputData.GetField(fieldName).GetData().AsArrayHandle<cont::ArrayHandle<Float64>>());
+    //mesh.SortData(inputData.GetField(fieldName).GetData().AsArrayHandle<cont::ArrayHandle<Float64>>());
+    mesh.SortData(inputData.GetField(fieldName).GetData().AsArrayHandle<cont::ArrayHandle<FloatDefault>>());
 
     // Set up extremal chains
     worklet::contourtree_augmented::MeshExtrema extrema(mesh.NumVertices);
@@ -326,14 +686,192 @@ vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(v
     // Prepare output
 
     vtkm::cont::PartitionedDataSet outputContours;
+    
+    
+    // ==================================================================================================================================== //
+    // ==================================================================================================================================== //
+    // ==================================================================================================================================== //
 
+    // SET UP (creating the CT, branch decomposition, simplification, and choosing N most important) DONE. Now actualy extracting contours  //
+
+    // ==================================================================================================================================== //
+    // ==================================================================================================================================== //
+    // ==================================================================================================================================== //
+
+    std::cout << "Branches to extract: " << numberOfBranches << " vs requested: " << vals.size()<< std::endl;
+
+    std::cout << "extracting branches: [";
     for (int k = 0 ; k < numberOfBranches; k++)
     {
         //
         // Compute MC Triangles for each isovalue and filter out the triangles that do not belong to the current branch
         //
+        std::cout << "'" << vals[k].second << "',";
+    }
+    std::cout << "]?" << std::endl;
+    std::cout << "a" << std::endl;
+    std::cout << "b" << std::endl;
+    std::cout << "at isovalues: [";
+
+    // fill in how many isosurfaces to generate (with betti changes as well)
+    //               branchID  isosurface     bettiNum
+    vector<std::tuple<vtkm::Id, vtkm::Float64, vtkm::Id>> flexIsosurfaces;
+
+
+    //flexIsosurfaces.emplace_back(2233, 0.00101293, 48); // manual inspection 128K
+    //flexIsosurfaces.emplace_back(2233, 0.00107853, 27); // manual inspection 128K
+    //flexIsosurfaces.emplace_back(2233, 0.00107855, 8); // manual inspection 128K
+    //flexIsosurfaces.emplace_back(2233, 0.0010836, 2); // manual inspection 128K
+    flexIsosurfaces.emplace_back(2233, 0.00108369, 1); // manual inspection 128K
+    flexIsosurfaces.emplace_back(2233, 0.00109757, 0); // manual inspection 128K
+
+
+    vtkm::Id ring_branch = vals[1].second;//2260;
+    //    flexIsosurfaces.emplace_back(ring_branch, 0.000920763, 41); // manual inspection 200K
+//    flexIsosurfaces.emplace_back(ring_branch, 0.00101375, 10); // manual inspection 200K
+//    flexIsosurfaces.emplace_back(ring_branch, 0.00101581, 6); // manual inspection 200K
+//    flexIsosurfaces.emplace_back(ring_branch, 0.00102285, 1); // manual inspection 200K
+//    flexIsosurfaces.emplace_back(ring_branch, 0.00103525, 1); // manual inspection 200K
+//    flexIsosurfaces.emplace_back(ring_branch, 0.0010549, 1); // manual inspection 200K
+//    flexIsosurfaces.emplace_back(ring_branch, 0.00117022, 41); // manual inspection 200K
+//    flexIsosurfaces.emplace_back(ring_branch, 0.00118316, 31); // manual inspection 200K
+//    flexIsosurfaces.emplace_back(ring_branch, 0.00119409, 6); // manual inspection 200K
+    
+    
+    
+    
+        for (int k = 0 ; k < numberOfBranches; k++)
+    {
+        std::cout << "k=" << k << std::endl;
+        //
+        // Compute MC Triangles for each isovalue and filter out the triangles that do not belong to the current branch
+        //
         const Id branchId = vals[k].second;
         const Float64 branchIsovalue = vals[k].first;
+
+        std::cout << branches.size() << std::endl;
+        std::cout << branchId << " " << branchIsovalue << "Betti changes? : " << branches[branchId]->BettiChanges.size() << std::endl;
+
+        vtkm::Id extremum = branches[branchId]->Extremum;
+        vtkm::Id saddle = branches[branchId]->Saddle;
+
+//        if (min < saddle)
+//        {
+//            endpoints = {ctSortOrder.ReadPortal().Get(min), ctSortOrder.ReadPortal().Get(saddle)};
+//            regularEndpoints = {min, saddle};
+//            branchHeight = saddle - min;
+//            branchType = 0;
+//            if (0 == branchType)
+//            {
+//                isovalue = b - epsilon;
+//            }
+//        }
+
+        if (branches[branchId]->BettiChanges.size() == 0)
+        {
+            // experiment - don't add unless has betti changes
+//            flexIsosurfaces.emplace_back(branchId, branchIsovalue, -1);
+        }
+//        else // this adds ANY top Betti change (below changed so that only generates isovalues at Betti1==2
+//        {
+//            flexIsosurfaces.emplace_back(branchId, branchIsovalue, -1);
+//            flexIsosurfaces.emplace_back(branchId, branches[branchId]->TopBettiChangeDataValue, branches[branchId]->TopBetti1Number);
+//        }
+
+        // ALL Betti Changes
+        else
+        {
+            // experiment - don't add unless has betti changes
+//            flexIsosurfaces.emplace_back(branchId, branchIsovalue, -1);
+//            if (k > 0) // skip the main branch
+            {
+//                vtkm::Id ring_branch = 12661; //6084; //1578; //70;
+                if(branchId == ring_branch)
+                {
+//                    std::string filename = "";
+                    std::ofstream file("ContourTreeBetti--branch-"+std::to_string(ring_branch)+"plot.txt");
+
+                    for (vtkm::Id betti_i = 0; betti_i < branches[branchId]->BettiChanges.size(); betti_i++)
+                    {
+                        // std::cout << branchID << " = " << whichBranchPortal.Get(branchID) << std::endl;
+                        file << betti_i << "\t" << branches[ring_branch]->Betti1Numbers[betti_i]
+                                        << "\t" << branches[ring_branch]->BettiChangesDataValue[betti_i] << std::endl;
+                    }
+                    file.close();
+                }
+
+                for(int i = 0; i < branches[branchId]->BettiChanges.size(); i++)
+                {
+                    if(2 == branches[branchId]->Betti1Numbers[i])
+                    {
+                        flexIsosurfaces.emplace_back(branchId, branches[branchId]->BettiChangesDataValue[i], branches[branchId]->Betti1Numbers[i]);
+                        break; // experiment - just get the first genus 1 surface per such branch
+                    }
+                }
+            }
+        }
+
+//        else
+//        {
+//            flexIsosurfaces.emplace_back(branchId, branchIsovalue, -1);
+//            for(int i = 0; i < branches[branchId]->BettiChanges.size(); i++)
+//            {
+////                if(branches[branchId]->Betti1Numbers[i] == 2)
+//                {
+//                    flexIsosurfaces.emplace_back(branchId, branches[branchId]->BettiChangesDataValue[i], branches[branchId]->Betti1Numbers[i]);
+////                    vtkm::Float64 epsilon   = 0.00000005f;
+////                    if ((extremum < saddle) && (saddle > 0))
+////                    {
+////                        flexIsosurfaces.emplace_back(branchId, branches[branchId]->BettiChangesDataValue[i]-epsilon, branches[branchId]->Betti1Numbers[i]);
+////                    }
+////                    else
+////                    {
+////                        flexIsosurfaces.emplace_back(branchId, branches[branchId]->BettiChangesDataValue[i]+epsilon, branches[branchId]->Betti1Numbers[i]);
+////                    }
+//                }
+//            }
+//        }
+
+//        else// if (2 == branches[branchId]->TopBetti1Number)
+//        {
+//            flexIsosurfaces.emplace_back(branchId, branchIsovalue, -1);
+//            vtkm::Float64 epsilon   = 0.000000005f;
+//            if (extremum < saddle)
+//            {
+//                flexIsosurfaces.emplace_back(branchId, branches[branchId]->TopBettiChangeDataValue-epsilon, branches[branchId]->TopBetti1Number);
+//            }
+//            else
+//            {
+//                flexIsosurfaces.emplace_back(branchId, branches[branchId]->TopBettiChangeDataValue+epsilon, branches[branchId]->TopBetti1Number);
+//            }
+
+//        }
+////        else // if no Betti1 == 2 topology changes, don't bother generating an isosurface ...
+////        {
+////            flexIsosurfaces.emplace_back(branchId, branchIsovalue, -1);
+////        }
+    }
+    
+    
+    
+    
+    
+    
+    
+    
+
+//    for (int k = 0 ; k < numberOfBranches; k++) old version - we had one isosurface per branch, now can have betti changes within the branch
+    for (int k = 0 ; k < flexIsosurfaces.size(); k++)
+    {
+        //
+        // Compute MC Triangles for each isovalue and filter out the triangles that do not belong to the current branch
+        //
+        /*
+        const Id branchId = vals[k].second;
+        const Float64 branchIsovalue = vals[k].first;*/
+        const Id branchId = std::get<0>(flexIsosurfaces[k]); //.first;
+        const Float64 branchIsovalue = std::get<1>(flexIsosurfaces[k]); //flexIsosurfaces[k].second;
+        const Id branchBetti = std::get<2>(flexIsosurfaces[k]); //flexIsosurfaces[k].third;
 
         // 
         // Print some debug info
@@ -350,9 +888,36 @@ vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(v
 
         // Compute an isosurface for the whole data set
         cont::ArrayHandle<cv1k::Triangle> mcTriangles = cv1k::mc::getMarchingCubeTriangles(inputData, {branchIsovalue}, fieldName);
+        
+        
+		std::cout << "cheesing it" << std::endl;
+        
+        
+        
+// 1. Get your float data
+auto floatData = inputData.GetField(fieldName).GetData();
+
+// 2. Create a physical double array
+vtkm::cont::ArrayHandle<vtkm::Float64> materializedDoubles;
+
+// 3. Copy/Convert the data into the new buffer
+vtkm::cont::ArrayCopy(floatData, materializedDoubles);
+
+// 4. Pass the materialized array to your function
+cv1k::filter::computeTriangleIds(ct, mesh, extrema, materializedDoubles, mcTriangles, branchIsovalue);
+		
+		
+		
+		std::cout << "cheesed it" << std::endl;
+		
+		
+		
+		
 
         // Compute the superarc ID of all the triangles
-        cv1k::filter::computeTriangleIds(ct, mesh, extrema, inputData.GetField(fieldName).GetData().AsArrayHandle<cont::ArrayHandle<Float64>>(), mcTriangles, branchIsovalue);
+        //cv1k::filter::computeTriangleIds(ct, mesh, extrema, inputData.GetField(fieldName).GetData().AsArrayHandle<cont::ArrayHandle<Float64>>(), mcTriangles, branchIsovalue);
+        //cv1k::filter::computeTriangleIds(ct, mesh, extrema, castArray, mcTriangles, branchIsovalue);
+        //cv1k::filter::computeTriangleIds(ct, mesh, extrema, inputData.GetField(fieldName).GetData().AsArrayHandle<cont::ArrayHandle<FloatDefault>>(), mcTriangles, branchIsovalue);
 
         //
         // Compute the superarc from the current branch sits at that isovalue 
@@ -360,6 +925,7 @@ vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(v
         cont::ArrayHandle<Vec<Id, 2>> endpoints;
         cont::ArrayHandle<Id> superarcIds;
         cont::ArrayHandle<Float64> isovalueArray;
+        //cont::ArrayHandle<FloatDefault> isovalueArray;
         endpoints.Allocate(1);
         superarcIds.Allocate(1);
         isovalueArray.Allocate(1);
@@ -380,7 +946,8 @@ vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(v
         Invoke(
                 setTrianglesId,
                 endpoints,
-                inputData.GetField(fieldName).GetData().AsArrayHandle<cont::ArrayHandle<Float64>>(),
+                //inputData.GetField(fieldName).GetData().AsArrayHandle<cont::ArrayHandle<Float64>>(),
+                materializedDoubles, // not using Float:64 input data anymore
                 isovalueArray,
                 mesh.SortOrder, // (input)
                 mesh.SortIndices, // (input)
@@ -607,7 +1174,8 @@ void cv1k::interface::computeAdditionalBranchData(
         }
     }
 
-    std::vector<std::tuple<vtkm::Id, vtkm::Id, vtkm::Id, vtkm::Float64>> branchEndpointsStd;
+    //std::vector<std::tuple<vtkm::Id, vtkm::Id, vtkm::Id, vtkm::Float64>> branchEndpointsStd;
+    std::vector<std::tuple<vtkm::Id, vtkm::Id, vtkm::Id, vtkm::FloatDefault>> branchEndpointsStd;
 
     // Converts the branches to mesh vertex endpoints and compute isovalue
     std::cout << "Computing isovalues for each branch (total num. isovalues: "
@@ -660,10 +1228,13 @@ void cv1k::interface::computeAdditionalBranchData(
             branchType = 2;
         }
 
-        Float64 a = inputData.GetField(fieldName).GetData().AsArrayHandle<cont::ArrayHandle<Float64>>().ReadPortal().Get(endpoints[0]);
-        Float64 b = inputData.GetField(fieldName).GetData().AsArrayHandle<cont::ArrayHandle<Float64>>().ReadPortal().Get(endpoints[1]);
+        //Float64 a = inputData.GetField(fieldName).GetData().AsArrayHandle<cont::ArrayHandle<Float64>>().ReadPortal().Get(endpoints[0]);
+        FloatDefault a = inputData.GetField(fieldName).GetData().AsArrayHandle<cont::ArrayHandle<FloatDefault>>().ReadPortal().Get(endpoints[0]);
+        FloatDefault b = inputData.GetField(fieldName).GetData().AsArrayHandle<cont::ArrayHandle<FloatDefault>>().ReadPortal().Get(endpoints[1]);
+        //Float64 b = inputData.GetField(fieldName).GetData().AsArrayHandle<cont::ArrayHandle<Float64>>().ReadPortal().Get(endpoints[1]);
 
-        Float64 isovalue = 0.0;
+        //Float64 isovalue = 0.0;
+        FloatDefault isovalue = 0.0;
 
         if ("half" == branchIsovalueFlag)
         {
@@ -675,7 +1246,8 @@ void cv1k::interface::computeAdditionalBranchData(
         }
         else
         {
-            vtkm::Float64 epsilon = 0.00000001f;
+            //vtkm::Float64 epsilon = 0.00000001f;
+            vtkm::FloatDefault epsilon = 0.00000001f;
             if (0 == branchType)
             {
                 isovalue = b - epsilon;

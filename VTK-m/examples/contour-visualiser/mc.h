@@ -47,6 +47,8 @@ namespace mc
      * Returns a list of triangles (see Triangle.h), whose superarcIds are NOT set.
      * They will be set after the call to this function.
      */
-    vtkm::cont::ArrayHandle<cv1k::Triangle> getMarchingCubeTriangles(vtkm::cont::DataSet, std::vector<vtkm::Float64>, std::string);
+    vtkm::cont::ArrayHandle<cv1k::Triangle> getMarchingCubeTriangles(vtkm::cont::DataSet, std::vector<vtkm::Float64>, std::string); 
+    // actually has to be Float64 due to vtkm contour filter
+    //vtkm::cont::ArrayHandle<cv1k::Triangle> getMarchingCubeTriangles(vtkm::cont::DataSet, std::vector<vtkm::FloatDefault>, std::string);
 }
 }

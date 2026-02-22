@@ -49,6 +49,12 @@ namespace cv1k
 namespace filter
 {
     void computeTriangleIds(vtkm::worklet::contourtree_augmented::ContourTree contourTree, vtkm::worklet::contourtree_augmented::DataSetMesh, vtkm::worklet::contourtree_augmented::MeshExtrema, vtkm::cont::ArrayHandle<vtkm::Float64>, vtkm::cont::ArrayHandle<cv1k::Triangle> triangles, vtkm::Float64 isovalue);
+    //void computeTriangleIds(vtkm::worklet::contourtree_augmented::ContourTree contourTree, 
+							//vtkm::worklet::contourtree_augmented::DataSetMesh, 
+							//vtkm::worklet::contourtree_augmented::MeshExtrema,
+							//vtkm::cont::ArrayHandle<vtkm::FloatDefault>, 
+							//vtkm::cont::ArrayHandle<cv1k::Triangle> triangles, 
+							//vtkm::FloatDefault isovalue);
 
 }
 }

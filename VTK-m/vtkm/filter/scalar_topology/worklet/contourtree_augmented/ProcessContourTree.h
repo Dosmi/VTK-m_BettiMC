@@ -925,31 +925,31 @@ std::vector<vtkm::Id> static ComputeSortIDStdVector(const vtkm::cont::DataSet& i
         
         ConnectivityOutput cubeConnectivity = ExtractStructuredConnectivity(sortIDLookup, input);
         
-        PrintConnectivity(cubeConnectivity);
+        //PrintConnectivity(cubeConnectivity);
         
         vtkm::cont::ArrayHandle<ValueType> dataField;
 	    input.GetField("values").GetData().AsArrayHandle(dataField);
 	    //auto dataField1Portal = dataField.ReadPortal();
 	    auto dataPortal = dataField.ReadPortal();
 	    
-	    std::cout << "@@@@@@@@@@@@@@@@@@@@@" << std::endl;
-	    //for(int i = 0; i < dataField1Portal.GetNumberOfValues(); i++)
-	    for(int i = 0; i < dataPortal.GetNumberOfValues(); i++)
-	    {
-			//std::cout << i << " " << dataField1Portal.Get(i) << std::endl;
-			std::cout << i << " " << dataPortal.Get(i) << std::endl;
-		}
+	    //std::cout << "@@@@@@@@@@@@@@@@@@@@@" << std::endl;
+	    ////for(int i = 0; i < dataField1Portal.GetNumberOfValues(); i++)
+	    //for(int i = 0; i < dataPortal.GetNumberOfValues(); i++)
+	    //{
+			////std::cout << i << " " << dataField1Portal.Get(i) << std::endl;
+			//std::cout << i << " " << dataPortal.Get(i) << std::endl;
+		//}
 		
 		
 		
-		//auto sortIDLookup = ComputeSortIDStdVector(input);
-		std::cout << "@@@@@@@@@@@@@@@@@@@@@" << std::endl;
-		for (vtkm::Id i = 0; i < sortIDLookup.size(); ++i)
-		{
-			std::cout << i 
-					  << "\t" 
-					  << sortIDLookup[i] << "\n";
-		}
+		////auto sortIDLookup = ComputeSortIDStdVector(input);
+		//std::cout << "@@@@@@@@@@@@@@@@@@@@@" << std::endl;
+		//for (vtkm::Id i = 0; i < sortIDLookup.size(); ++i)
+		//{
+			//std::cout << i 
+					  //<< "\t" 
+					  //<< sortIDLookup[i] << "\n";
+		//}
 
 		//auto portalSort = sortIDLookup.ReadPortal();
 
@@ -1669,7 +1669,7 @@ std::vector<vtkm::Id> static ComputeSortIDStdVector(const vtkm::cont::DataSet& i
 
         for (vtkm::Id i = 0; i < zipPortal.GetNumberOfValues(); ++i)
         {
-			std::cout << "processing " << i << "th zip" << std::endl;
+			//std::cout << "processing " << i << "th zip" << std::endl;
             
             plus1test = false;
             auto triple = zipPortal.Get(i);
@@ -1699,7 +1699,7 @@ std::vector<vtkm::Id> static ComputeSortIDStdVector(const vtkm::cont::DataSet& i
 //                aug_betti_num = abs(abs(aug_betti_num) - abs(previousTriple.second.second));
 //            }
 
-			std::cout << "           " << i << " (a)" << std::endl;
+			//std::cout << "           " << i << " (a)" << std::endl;
 
             if(i+1 >= zipPortal.GetNumberOfValues())
             {
@@ -1727,7 +1727,7 @@ std::vector<vtkm::Id> static ComputeSortIDStdVector(const vtkm::cont::DataSet& i
                 }
             }
             
-            std::cout << "           " << i << " (b)" << std::endl;
+            //std::cout << "           " << i << " (b)" << std::endl;
 
             if(plus1test)
             { // if not end of segment yet ...
@@ -1745,11 +1745,11 @@ std::vector<vtkm::Id> static ComputeSortIDStdVector(const vtkm::cont::DataSet& i
                 newSuperTargets.push_back(vtkm::worklet::contourtree_augmented::MaskedIndex(vtkm::cont::ArrayGetValue(superparent, contourTree.Superarcs)));
             }
             
-            std::cout << "           " << i << " (c)" << std::endl;
+            //std::cout << "           " << i << " (c)" << std::endl;
             
             vtkm::Id superID     = superparentsPortal.Get(regularID);
             
-            std::cout << "           " << i << " (d)" << std::endl;
+            //std::cout << "           " << i << " (d)" << std::endl;
 
 //            bool isNew = false;
 //            vtkm::Id new_superID_relabel = hyperparent;
@@ -1784,15 +1784,15 @@ std::vector<vtkm::Id> static ComputeSortIDStdVector(const vtkm::cont::DataSet& i
             // keep track of betti numbers per supernode:
 //            contourTree.SupernodeBetti[newSuperIDsRelabelled] = aug_betti_num;
 
-			std::cout << "           " << i << " (e)" << std::endl;
+			//std::cout << "           " << i << " (e)" << std::endl;
 			
-			std::cout << "ct_betti_portal.size() = " << ct_betti_portal.GetNumberOfValues() << std::endl;
-			std::cout << "ct_BettiOriginalSuperparents_portal.size() = " << ct_BettiOriginalSuperparents_portal.GetNumberOfValues() << std::endl;
+			//std::cout << "ct_betti_portal.size() = " << ct_betti_portal.GetNumberOfValues() << std::endl;
+			//std::cout << "ct_BettiOriginalSuperparents_portal.size() = " << ct_BettiOriginalSuperparents_portal.GetNumberOfValues() << std::endl;
 
             ct_betti_portal.Set	(newSuperIDsRelabelled[i], aug_betti_num);
             ct_BettiOriginalSuperparents_portal.Set(newSuperIDsRelabelled[i], superparent);
             
-            std::cout << "           " << i << " (m)" << std::endl;
+            //std::cout << "           " << i << " (m)" << std::endl;
         }
 
 #if WRITE_FILES

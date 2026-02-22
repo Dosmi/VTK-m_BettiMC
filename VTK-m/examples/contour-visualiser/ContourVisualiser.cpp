@@ -79,13 +79,15 @@ cont::DataSet read2DUniformGridData(std::string fileName, std::string fieldName)
     const Id2 pointDimensions(ydim, xdim);
 
     // Read Data Values
-    cont::ArrayHandle<Float64, VTKM_DEFAULT_STORAGE_TAG> fieldVals;
+    //cont::ArrayHandle<Float64, VTKM_DEFAULT_STORAGE_TAG> fieldVals;
+    cont::ArrayHandle<vtkm::Float32, VTKM_DEFAULT_STORAGE_TAG> fieldVals;
     fieldVals.Allocate(xdim * ydim);
     auto fieldValsPortal = fieldVals.WritePortal();
 
     for (Id i = 0; i < xdim * ydim; i++)
     {
-        Float64 fieldValue;
+        //Float64 fieldValue;
+        vtkm::Float32 fieldValue;
         file >> fieldValue;
         fieldValsPortal.Set(i, fieldValue);
     }
@@ -135,7 +137,7 @@ int main(int argc, char* argv[])
     string fileName;
     cliApp.add_option("--file, -f", fileName, "Input data fileName. Has to be either .txt of .vti.")->required();
 
-    string fieldName = "var";
+    string fieldName = "values"; //"var"; old name == "var"
     cliApp.add_option("--isovalue, -i", fieldName, "The name of the isovalue field in the input data file. For txt files, the name does not matter.");
 
     string decompositionType = "height";
@@ -159,7 +161,8 @@ int main(int argc, char* argv[])
     string cinemaOutputFilename = "";
     cliApp.add_option("--cinemadb, -c", cinemaOutputFilename, "Name of the cinema db output fileName.");
 
-    Float64 isovalue = 0.0;
+    //Float64 isovalue = 0.0;
+    vtkm::Float32 isovalue = 0.0;
     cliApp.add_option("--isovalueValue", isovalue, "Used to visualise a single isosurface. Debuging feature.");
 
     string selectionType = "sort";
@@ -233,7 +236,8 @@ int main(int argc, char* argv[])
 
     std::vector<vtkm::Float32>::size_type nDims = 0;
     vtkm::cont::DataSet inputData;
-    std::vector<vtkm::Float64> values;
+    //std::vector<vtkm::Float64> values;
+    std::vector<vtkm::FloatDefault> values;
     std::vector<vtkm::Id> dims;
 
 
@@ -371,7 +375,9 @@ int main(int argc, char* argv[])
             // we repeat the same for the isovalues:
             vtkm::Range isovaluerange[1];
             outputDataSets.GetPartition(i).GetPointField("isovaluePoints").GetRange(isovaluerange);
-            vtkm::Float64 contourIsovalue = isovaluerange[0].Center();
+            //vtkm::Float64 contourIsovalue = isovaluerange[0].Center();
+            //vtkm::FloatDefault contourIsovalue = isovaluerange[0].Center();
+            vtkm::Float32 contourIsovalue = isovaluerange[0].Center();
 
             string currentFilename = outputFilename;
 

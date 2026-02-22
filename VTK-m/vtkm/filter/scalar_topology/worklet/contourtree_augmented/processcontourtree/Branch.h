@@ -63,6 +63,7 @@
 #define DEBUG_PRINT_PACTBD 0
 //#define WRITE_FILES 1
 
+
 namespace vtkm
 {
 namespace worklet
@@ -73,7 +74,7 @@ namespace process_contourtree_inc
 {
 	
 //using ValueType = vtkm::Float64; //vtkm::FloatDefault;
-using ValueType = vtkm::FloatDefault; //vtkm::FloatDefault;
+using ValueType = vtkm::Float32; //vtkm::FloatDefault; //vtkm::FloatDefault;
 using FloatArrayType = vtkm::cont::ArrayHandle<ValueType>;
 
 // TODO The pointered list structure and use of std::vector don't seem to fit well with using Branch with VTKM
@@ -395,14 +396,14 @@ Branch<T>* Branch<T>::ComputeBranchDecomposition(
 
 
 
-//#if DEBUG_PRINT_PACTBD
+#if DEBUG_PRINT_PACTBD
   std::cout << std::endl << "(Branch.h->ComputeBranchDecomposition) Superarc Intrinsic Weight Portal (PASSED IN):" << std::endl;
   for(int i = 0; i < superarcIntrinsicWeightPortal.GetNumberOfValues(); i++)
   {
       std::cout << i << " -> " << superarcIntrinsicWeightPortal.Get(i) << std::endl;
   }
   std::cout << std::endl;
-//#endif
+#endif
 
 //  NOT USING DEPENDENT WEIGHTS YET
 //  std::cout << std::endl << "(Branch.h->ComputeBranchDecomposition) Superarc Dependent Weight Portal:" << std::endl;
@@ -613,6 +614,8 @@ std::cout << "Printing the supernode/branch mappings" << std::endl;
 		//std::cout << vhog << "\t" << supernodesPortal.Get(vhog) << std::endl;
 	//}
 
+	//std::cout << "Num. Betti changes: " << supernodeBettiPortal.GetNumberOfValues() << std::endl;
+
     for(int j = 0; j < branch_SP_map[i].size(); j+=3) //j++)
     {
 		//std::cout << "branch_SP_map[i].size() = " << branch_SP_map[i].size() << std::endl;
@@ -628,7 +631,10 @@ std::cout << "Printing the supernode/branch mappings" << std::endl;
 
 //#if WRITE_FILES
         //std::cout << branch_SP_map[i][j] << "(" << supernodeBettiPortal.Get(branch_SP_map[i][j]) << ")"; //"(" << dataFieldPortal.Get(branch_SP_map[i][j]) << ")";
-        filebsp   << branch_SP_map[i][j] << "(" << supernodeBettiPortal.Get(branch_SP_map[i][j]) << ")"; //"(" << dataFieldPortal.Get(branch_SP_map[i][j]) << ")";
+        if(supernodeBettiPortal.GetNumberOfValues() > 0)
+        {
+			filebsp   << branch_SP_map[i][j] << "(" << supernodeBettiPortal.Get(branch_SP_map[i][j]) << ")"; //"(" << dataFieldPortal.Get(branch_SP_map[i][j]) << ")";
+		}
         //std::cout << "[" << regularIDbr << "]";
         filebsp   << "[" << regularIDbr << "]";
         //std::cout << "{" << valueFieldPortal.Get( supernodesPortal.Get(sortOrderPortal.Get(branch_SP_map[i][j])) ) << "}\t";
@@ -644,7 +650,10 @@ std::cout << "Printing the supernode/branch mappings" << std::endl;
             branches[i]->BettiChangesDataValue.push_back(valueFieldPortal.Get( regularIDbr ));
             // ... then the volumes for potential simplification:
             //branches[i]->BettiArcVolumes.push_back(superarcIntrinsicWeightPortal.Get(branch_SP_map[i][j])); // back to integer weights
-            branches[i]->Betti1Numbers.push_back(supernodeBettiPortal.Get(branch_SP_map[i][j]));
+            if(supernodeBettiPortal.GetNumberOfValues() > 0)
+            {
+				branches[i]->Betti1Numbers.push_back(supernodeBettiPortal.Get(branch_SP_map[i][j]));
+			}
 
             // add an additional filter just to get Betti1 changes:
 //            if ((supernodeBettiPortal.Get(branch_SP_map[i][j]) == 2) && (superarcIntrinsicWeightPortal.Get(branch_SP_map[i][j]) > TopBettiArcVolume))
@@ -672,10 +681,23 @@ std::cout << "Printing the supernode/branch mappings" << std::endl;
     
     filebsp << std::endl << "\t\t";
     
+    // Betti Numbers Row:
     for(int j = 0; j < branch_SP_map[i].size(); j+=3) //j++)
     {
         vtkm::Id regularIDbr = sortOrderPortal.Get(supernodesPortal.Get(branch_SP_map[i][j])); // get its sort order as regular
-        filebsp << supernodeBettiPortal.Get(branch_SP_map[i][j]) << "\t"; //"(" << dataFieldPortal.Get(branch_SP_map[i][j]) << ")";
+        if(supernodeBettiPortal.GetNumberOfValues() > 0)
+        {
+			filebsp << supernodeBettiPortal.Get(branch_SP_map[i][j]) << "\t"; //"(" << dataFieldPortal.Get(branch_SP_map[i][j]) << ")";
+		}
+	}
+
+	filebsp << std::endl << "\t\t";
+	
+	// Isovalue Row:
+    for(int j = 0; j < branch_SP_map[i].size(); j+=3) //j++)
+    {
+        vtkm::Id regularIDbr = sortOrderPortal.Get(supernodesPortal.Get(branch_SP_map[i][j])); // get its sort order as regular
+        filebsp << valueFieldPortal.Get( regularIDbr ) << "\t"; //"(" << dataFieldPortal.Get(branch_SP_map[i][j]) << ")";
 	}
 
 	filebsp << std::endl;

@@ -1,0 +1,492 @@
+ custom GTK3 CSS for Geany 
+ 
+ 
+ 
+ 
+ /* This targets the lines between the sidebar, editor, and messages */
+paned > separator {
+    background-color: #3b536c; /* Your blue color */
+    min-width: 1px;
+    min-height: 1px;
+}
+
+
+/* Optional: Make the line change color when you hover over it to drag */
+paned > separator:hover {
+    background-color: #ffffff;
+}
+ 
+ 
+ 
+ 
+ 
+ 
+ /* Target the main window and dialog frames */
+window, dialog, .background {
+    border: 1px solid #3b536b; /* darker blue outside border */
+}
+
+/* This targets the "decoration" area (the frame around the window) */
+decoration {
+    border: 1px solid #3b536b; /* darker blue outside border */
+    background-color: #191919;
+}
+ 
+ 
+ /* ===== Find / Replace dialog ===== */
+
+dialog {
+    background-color: #212121;
+    color: #d0d0d0;
+}
+
+dialog box {
+    background-color: #212121;
+}
+
+dialog label {
+    color: #d0d0d0;
+}
+
+/* Entry fields (search input) */
+dialog entry {
+    background-color: #2a2a2a;
+    color: #e0e0e0;
+    border: 1px solid #333333;
+}
+
+/* Buttons inside dialog */
+dialog button {
+    background-color: #2a2a2a;
+    color: #d0d0d0;
+    border: 1px solid #333333;
+}
+
+dialog button:hover {
+    background-color: #3a3a3a;
+}
+
+/* Checkboxes */
+dialog checkbutton {
+    color: #d0d0d0;
+}
+
+/* Selection color inside entry */
+dialog entry selection {
+    background-color: #444444;
+    color: #ffffff;
+}
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+  /* Entire notebook header strip */
+
+/* Label inside tab */
+notebook > header > tabs > tab label {
+    background-color: transparent;
+    color: #d0d0d0;
+}
+ 
+
+ 
+ 
+ /* ===== Top area ===== */
+
+/* Main window background */
+window {
+    background-color: #191919;
+}
+
+/* Menu bar */
+menubar {
+    background-color: #191919;
+    color: #191919; /*#d0d0d0;*/
+}
+
+
+/* Toolbar */
+toolbar {
+    background-color: #191919;
+    border: none;
+}
+
+/* This controls the background of the entire tab bar area */
+notebook > header {
+    background-color: #191919;
+    border: none;
+}
+
+/* Target the label inside the tab to remove its independent background */
+notebook > header > tabs > tab label {
+    background-color: #2a2a2a; /* TAB LABEL BACKGROUND (BOX) */
+    background-image: none;
+    color: #dddddd; /* Your preferred text color */
+}
+
+
+
+/* Target the Find/Replace entry when no match is found (from your docs) */
+#geany-search-entry-no-match {
+    background-color: #ff2a2a;
+    color: #ffffff;
+}
+
+/* Target all buttons inside Geany's dialog windows */
+dialog button {
+    background-image: none;
+    background-color: #333333;
+    border: 1px solid #4888cb; /* nice red too: #ff2a2a; */
+    color: #ffffff;
+    box-shadow: none;
+}
+
+/* Fix the black background behind button text */
+dialog button label {
+    background-color: transparent;
+    color: inherit;
+}
+
+/* Hover state for dialog buttons */
+dialog button:hover {
+    background-color: #4888cb; /* nice red too: #ff2a2a; */
+    color: #191919;
+}
+
+
+
+
+/* Add space around the button container in dialogs */
+dialog .dialog-action-area {
+    margin: 5px;
+}
+
+
+
+
+
+/* Target the container for the buttons */
+dialog .dialog-action-area {
+    padding-top: 15px;
+    padding-bottom: 15px;
+    padding-left: 15px;
+    padding-right:60px;
+    
+    background-color: #333333;
+    border: 1px solid #3498db; /* Use your new blue hex here */
+        
+}
+
+  
+  /* 3. Keep the buttons uniform and blue */
+dialog .dialog-action-area > box, grid {
+padding-right: 50px;
+}
+
+
+
+/* 3. Keep the buttons uniform and blue */
+dialog .dialog-action-area > button {
+    background-color: #2e2e2e;
+    border: 1px solid #3498db; /* Your blue */
+    min-width: 100px;
+    margin: 4px; /* Consistent gap between buttons */
+}
+
+/* 3. Keep the buttons uniform and blue */
+dialog .dialog-action-area > button:hover {
+    background-color: #4888cb;
+}
+
+/* 3. Keep the buttons uniform and blue */
+dialog .dialog-action-area > button:hover label{
+    background-color: #4888cb;
+}
+
+
+/* 4. Kill the black text boxes once and for all */
+dialog .dialog-action-area > button label {
+    background-color: #2e2e2e;
+    color: #ffffff;
+}
+
+
+/* Make the search input taller and padded */
+#geany-search-entry {
+    padding: 6px;
+    margin-bottom: 10px;
+    border: 1px solid #3498db; /* Use your new blue hex here */
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* FILE TABS */
+notebook > header > tabs > tab {
+    background-color: #2a2a2a; /* TAB HOLDING LABELS; */
+    color: #ff2a2a; /*#d0d0d0;*/
+}
+
+notebook > header > tabs > tab:checked {
+    background-color: #333333;
+    color: #ff2a2a; /*#d0d0d0; text col */
+}
+
+/* Target the box container that holds the label and button */
+notebook > header > tabs > tab box {
+    background-color: #2a2a2a; /* CROSS X BACKGROUND (BOX) */
+    background-image: none;
+    border: none;
+}
+
+/* Specifically target the close button's parent if 'box' is too broad */
+notebook > header > tabs > tab > button {
+    background-color: #3a3a3a; /* NOT SURE */
+    border: none;
+    box-shadow: none;
+}
+
+
+
+
+/* Targets the frame around the notebook and sidebar */
+scrolledwindow, 
+viewport {
+    border: 1px solid #333333; /* Use a darker color for a subtle look */
+}
+
+/* Remove default white/grey highlight borders */
+box, grid {
+    border: none;
+    outline: none;
+}
+
+
+/* Target the 'X' button inside the tabs */
+notebook > header > tabs > tab button {
+    background-color: #3a3a3a; /* CROSS BUTTON COLOUR ITSELF */
+    background-image: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    min-width: 16px;
+    min-height: 16px;
+}
+
+
+
+
+/* ===== Bottom area ===== */
+
+/* Status bar */
+statusbar {
+    background-color: #1c1c1c;
+    color: #c0c0c0;
+    border-top: 1px solid #333333;
+}
+ 
+ 
+ 
+
+ 
+ 
+
+/* Force main window + header areas */
+window,
+headerbar,
+.titlebar,
+toolbar,
+.menubar {
+    background-color: #191919;
+    color: #d0d0d0;
+}
+
+/* Toolbars and buttons */
+toolbar button,
+toolbar toolbutton,
+button {
+    background-color: #191919;
+    color: #d0d0d0;
+    border-color: #333333;
+}
+
+/* Sidebar (symbols, documents, etc.) */
+treeview,
+treeview.view,
+sidebar,
+scrolledwindow {
+    background-color: #212121;
+    color: #d0d0d0;
+}
+
+/* Menus */
+menu,
+menuitem {
+    background-color: #252525;
+    color: #d0d0d0;
+}
+
+menuitem:hover {
+    background-color: #3a3a3a;
+}
+
+/* Scrollbars */
+scrollbar {
+    background-color: #2a2a2a;
+}
+scrollbar slider {
+    background-color: #3b536c;
+}
+
+/* Statusbar */
+statusbar {
+    background-color: #1c1c1c;
+    color: #c0c0c0;
+}
+
+
+
+
+
+window,
+box,
+/*paned,*/
+notebook,
+stack,
+scrolledwindow,
+viewport,
+textview,
+treeview,
+headerbar {
+    background-color: #191919;
+    color: #c8c8c8;
+}
+
+entry,
+textview,
+treeview {
+    background-color: #f1f1f0;
+    color: #505050;
+}
+
+notebook tab {
+    background-color: #2a2a2a;
+    color: #dddddd;
+}
+
+notebook tab:checked {
+    background-color: #333333;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* make close button on the editor's tabs smaller */
+#geany-close-tab-button {
+	padding: 0;
+}
+#geany-close-tab-button GtkImage /* GTK < 3.20 */,
+#geany-close-tab-button image /* GTK >= 3.20 */ {
+	padding: 0;
+}
+
+/* use monospaced font in search entries for easier reading of regexp (#1907117) */
+#GeanyDialogSearch GtkEntry /* GTK < 3.20 */,
+#GeanyDialogSearch entry /* GTK >= 3.20 */ {
+	font-family: monospace;
+}
+
+/* set red background for GtkEntries showing unmatched searches */
+#geany-search-entry-no-match {
+	color: #fff;
+	background: #ff6666;
+}
+#geany-search-entry-no-match:selected /* GTK < 3.20 */,
+#geany-search-entry-no-match selection /* GTK >= 3.20 */ {
+	color: #fff;
+	background-color: #771111;
+}
+
+/* document status colors */
+#geany-document-status-changed {
+	color: #ff0000;
+}
+#geany-document-status-disk-changed {
+	color: #ff7f00;
+}
+#geany-document-status-readonly {
+	color: #007f00;
+}
+
+/* compiler message colors */
+#geany-compiler-error {
+    color: #ff0000;
+}
+#geany-compiler-context {
+    color: #7f0000;
+}
+#geany-compiler-message {
+    color: #0000D0;
+}
+
+/* red "Terminal" label when terminal dirty */
+#geany-terminal-dirty {
+	color: #ff0000;
+}
+
+
+/* MOVE TO BOTTOM OF FILE */
+/* This targets all possible names for the divider lines */
+/* 1. Target the actual divider handles */
+paned > separator,
+paned > handle {
+    background-color: #3b536c; /* Your muted blue */
+    background-image: none;
+    border: none;
+    min-width: 2px;
+    min-height: 2px;
+}
+
+/* 2. Force the borders of the main window containers to blue */
+/* This kills the white lines surrounding the editor and sidebar */
+scrolledwindow,
+viewport,
+treeview {
+    border: 1px solid #2e2e2e;
+}
+
+/* 3. Specifically target the vertical line between sidebar and editor */
+paned.horizontal > separator {
+    background-color: #3b536c;
+}

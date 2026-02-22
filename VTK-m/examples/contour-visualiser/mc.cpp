@@ -38,7 +38,8 @@ using namespace std;
 using namespace vtkm;
 
 cont::ArrayHandle<cv1k::Triangle> cv1k::mc::getMarchingCubeTriangles(cont::DataSet inputData,
-                                                                     vector<Float64> isovalues,
+                                                                     vector<Float64> isovalues, // actually has to be Float64 due to vtkm contour filter
+                                                                     //vector<FloatDefault> isovalues,
                                                                      std::string fieldName)
 {
     std::cout << "getMarchingCubeTriangles for these isovalues:" << std::endl;
@@ -96,7 +97,7 @@ cont::ArrayHandle<cv1k::Triangle> cv1k::mc::getMarchingCubeTriangles(cont::DataS
     // Extract triangles from the MC output cell mesh
     for(vtkm::Id cellId = 0; cellId < numCells; ++cellId)
     {
-        //        std::cout << "TRIANGLE #" << cellId << std::endl;
+                //std::cout << "TRIANGLE #" << cellId << std::endl;
 
         // retrieve the ID of the vertices from the marching tets output
         // this will not be the same as any of our usual (such as regular) IDs

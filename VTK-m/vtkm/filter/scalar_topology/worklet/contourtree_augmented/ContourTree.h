@@ -171,6 +171,64 @@ public:
 
   // initialises contour tree arrays - rest is done by another class
   inline ContourTree();
+  
+  
+  // Copy constructors
+  
+  ContourTree(const ContourTree& other)
+    : NumIterations(other.NumIterations),
+      Rootnode(other.Rootnode),
+      translateSupernodes(other.translateSupernodes)
+  {
+    Nodes.DeepCopyFrom(other.Nodes);
+    Arcs.DeepCopyFrom(other.Arcs);
+    Superparents.DeepCopyFrom(other.Superparents);
+    Supernodes.DeepCopyFrom(other.Supernodes);
+    Superarcs.DeepCopyFrom(other.Superarcs);
+    Augmentnodes.DeepCopyFrom(other.Augmentnodes);
+    Augmentarcs.DeepCopyFrom(other.Augmentarcs);
+    Hyperparents.DeepCopyFrom(other.Hyperparents);
+    WhenTransferred.DeepCopyFrom(other.WhenTransferred);
+    Hypernodes.DeepCopyFrom(other.Hypernodes);
+    Hyperarcs.DeepCopyFrom(other.Hyperarcs);
+    FirstSupernodePerIteration.DeepCopyFrom(other.FirstSupernodePerIteration);
+    FirstHypernodePerIteration.DeepCopyFrom(other.FirstHypernodePerIteration);
+    SupernodeBetti.DeepCopyFrom(other.SupernodeBetti);
+  }
+
+  ContourTree& operator=(const ContourTree& other)
+  {
+    if (this == &other)
+      return *this;
+
+    // Scalars / std containers
+    NumIterations = other.NumIterations;
+    Rootnode = other.Rootnode;
+    translateSupernodes = other.translateSupernodes;
+
+    // Force deep copies of VTK-m arrays
+    Nodes.DeepCopyFrom(other.Nodes);
+    Arcs.DeepCopyFrom(other.Arcs);
+    Superparents.DeepCopyFrom(other.Superparents);
+    Supernodes.DeepCopyFrom(other.Supernodes);
+    Superarcs.DeepCopyFrom(other.Superarcs);
+    Augmentnodes.DeepCopyFrom(other.Augmentnodes);
+    Augmentarcs.DeepCopyFrom(other.Augmentarcs);
+    Hyperparents.DeepCopyFrom(other.Hyperparents);
+    WhenTransferred.DeepCopyFrom(other.WhenTransferred);
+    Hypernodes.DeepCopyFrom(other.Hypernodes);
+    Hyperarcs.DeepCopyFrom(other.Hyperarcs);
+    FirstSupernodePerIteration.DeepCopyFrom(other.FirstSupernodePerIteration);
+    FirstHypernodePerIteration.DeepCopyFrom(other.FirstHypernodePerIteration);
+    SupernodeBetti.DeepCopyFrom(other.SupernodeBetti);
+
+    return *this;
+  }
+
+  
+  
+  
+  
 
   // initialises contour tree arrays - rest is done by another class
   inline void Init(vtkm::Id dataSize);

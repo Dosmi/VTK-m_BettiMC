@@ -1017,14 +1017,14 @@ vtkm::cont::ArrayHandle<float> dataField; //= useDataSet.GetField("values").GetD
         
         //vtkm::cont::ArrayHandle<ValueType> dataField =  vtkm::cont::make_ArrayHandle(std_nodes_sorted, vtkm::CopyFlag::Off);
 
-      for(unsigned i = 0; i < dataField.GetNumberOfValues(); i++)
-      {
-          std::cout << dataField.ReadPortal().Get(i) << " ";
-//          dataField.WritePortal().Set(i, i);
+      //for(unsigned i = 0; i < dataField.GetNumberOfValues(); i++)
+      //{
+          //std::cout << dataField.ReadPortal().Get(i) << " ";
+////          dataField.WritePortal().Set(i, i);
 
-      }
+      //}
 
-      std::cout << "\n";
+      //std::cout << "\n";
 
 #endif
 
