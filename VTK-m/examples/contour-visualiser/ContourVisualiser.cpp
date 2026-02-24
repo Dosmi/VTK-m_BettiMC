@@ -378,6 +378,10 @@ int main(int argc, char* argv[])
             //vtkm::Float64 contourIsovalue = isovaluerange[0].Center();
             //vtkm::FloatDefault contourIsovalue = isovaluerange[0].Center();
             vtkm::Float32 contourIsovalue = isovaluerange[0].Center();
+            // we repeat the same for the Betti numbers:
+            vtkm::Range bettirange[1];
+            outputDataSets.GetPartition(i).GetPointField("branchBettiPt").GetRange(bettirange);
+            vtkm::Id contourBetti = bettirange[0].Center();
 
             string currentFilename = outputFilename;
 
@@ -386,7 +390,19 @@ int main(int argc, char* argv[])
             currentFilename.append("-br");
             currentFilename.append(std::to_string(contourBranchId));
             currentFilename.append("-iso-");
-            currentFilename.append(std::to_string(contourIsovalue));
+            //currentFilename.append(std::to_string(contourIsovalue));
+            std::ostringstream oss;
+			// Use setprecision(8) or whatever depth you need
+			oss << std::fixed << std::setprecision(10) << contourIsovalue;
+
+			currentFilename.append(oss.str());
+
+            if(-1 != contourBetti)
+            {
+                currentFilename.append("-bti1-");
+                currentFilename.append(std::to_string(contourBetti));
+            }
+
             currentFilename.append(".vtk");
 
             cout << "The output filename is " << currentFilename << endl;

@@ -643,6 +643,12 @@ vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(v
     vtkm::cont::ArrayHandle<Float64> branchImportanceSecondary;
     if ("volume" == decompositionType)
     {
+        //branchImportance = branchPointVolumeArray;
+        
+		for (int i = 0; i < branches.size(); i++)
+		{
+			branchPointVolumeArray.WritePortal().Set(i, (Float64)branches[i]->Volume);// = originalBranchVolumeFloats[i];
+		}
         branchImportance = branchPointVolumeArray;
         branchImportanceSecondary = branchIsovalueHeightArray;
     }
@@ -722,8 +728,23 @@ vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(v
     //flexIsosurfaces.emplace_back(2233, 0.00107853, 27); // manual inspection 128K
     //flexIsosurfaces.emplace_back(2233, 0.00107855, 8); // manual inspection 128K
     //flexIsosurfaces.emplace_back(2233, 0.0010836, 2); // manual inspection 128K
-    flexIsosurfaces.emplace_back(2233, 0.00108369, 1); // manual inspection 128K
-    flexIsosurfaces.emplace_back(2233, 0.00109757, 0); // manual inspection 128K
+    //flexIsosurfaces.emplace_back(2233, 0.00108369, 1); // manual inspection 128K
+    //flexIsosurfaces.emplace_back(2233, 0.00109757, 0); // manual inspection 128K
+    flexIsosurfaces.emplace_back(2233, 0.00101293,  48); // manual inspection 128K
+    flexIsosurfaces.emplace_back(2233, 0.001078530, 27); // manual inspection 128K
+    flexIsosurfaces.emplace_back(2233, 0.001078550, 8); // manual inspection 128K
+    flexIsosurfaces.emplace_back(2233, 0.001083690, 1); // manual inspection 128K
+    flexIsosurfaces.emplace_back(2233, 0.001088710, 4); // manual inspection 128K
+    flexIsosurfaces.emplace_back(2233, 0.001097930, 1); // manual inspection 128K
+    flexIsosurfaces.emplace_back(2233, 0.001109390, 2); // manual inspection 128K
+    flexIsosurfaces.emplace_back(2233, 0.001119590, 1); // manual inspection 128K
+    flexIsosurfaces.emplace_back(2233, 0.001137220, 10); // manual inspection 128K
+    flexIsosurfaces.emplace_back(2233, 0.001176060, 102); // manual inspection 128K
+    flexIsosurfaces.emplace_back(2233, 0.001204830, 28); // manual inspection 128K
+    flexIsosurfaces.emplace_back(2233, 0.001204830, 28); // manual inspection 128K
+    flexIsosurfaces.emplace_back(2233, 0.001208640, 7); // manual inspection 128K
+    flexIsosurfaces.emplace_back(2233, 0.001211560, 11); // manual inspection 128K
+    flexIsosurfaces.emplace_back(2233, 0.001216300, 1); // manual inspection 128K
 
 
     vtkm::Id ring_branch = vals[1].second;//2260;
@@ -769,8 +790,8 @@ vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(v
 
         if (branches[branchId]->BettiChanges.size() == 0)
         {
-            // experiment - don't add unless has betti changes
-//            flexIsosurfaces.emplace_back(branchId, branchIsovalue, -1);
+            // comment out if don't want to generate a surface unless has betti changes
+            flexIsosurfaces.emplace_back(branchId, branchIsovalue, -1);
         }
 //        else // this adds ANY top Betti change (below changed so that only generates isovalues at Betti1==2
 //        {
@@ -781,8 +802,9 @@ vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(v
         // ALL Betti Changes
         else
         {
-            // experiment - don't add unless has betti changes
-//            flexIsosurfaces.emplace_back(branchId, branchIsovalue, -1);
+            // comment out if don't want to generate a surface unless has betti changes
+            // (The following generates the 'root' isosurface, top/bottom of the branch holding the betti change surfaces)
+            flexIsosurfaces.emplace_back(branchId, branchIsovalue, -1);
 //            if (k > 0) // skip the main branch
             {
 //                vtkm::Id ring_branch = 12661; //6084; //1578; //70;
@@ -1017,6 +1039,21 @@ cv1k::filter::computeTriangleIds(ct, mesh, extrema, materializedDoubles, mcTrian
 
 
         // ----------------- Write Cell Data ----------------- //
+        
+        
+		// add betti numbers to the triangles in the mesh for labelling:
+//        branchBetti - variable holding the Betti1 number
+        cont::ArrayHandle<vtkm::Float64> bettiCellField;
+        bettiCellField.Allocate(contourDataSet.GetNumberOfCells());
+        auto bettiCellFieldWritePortal = bettiCellField.WritePortal();
+        for (int i = 0 ; i < bettiCellField.GetNumberOfValues() ; i++)
+        {
+            bettiCellFieldWritePortal.Set(i, branchBetti);
+        }
+        contourDataSet.AddCellField("branchBetti",    bettiCellField);
+        
+        
+        
 
         cont::ArrayHandle<int> branchIDCellField;
         branchIDCellField.Allocate(contourDataSet.GetNumberOfCells());
@@ -1059,6 +1096,18 @@ cv1k::filter::computeTriangleIds(ct, mesh, extrema, materializedDoubles, mcTrian
 
 
         // ----------------- Write Point Data (shown first) ----------------- //
+        
+        
+		cont::ArrayHandle<vtkm::Float64> branchBettiPointField;
+        branchBettiPointField.Allocate(contourDataSet.GetNumberOfPoints());
+        auto branchBettiPointFieldWritePortal = branchBettiPointField.WritePortal();
+        for (int i = 0 ; i < branchBettiPointField.GetNumberOfValues() ; i++)
+        {
+            branchBettiPointFieldWritePortal.Set(i, branchBetti);//0.5);
+        }
+		
+		contourDataSet.AddPointField("branchBettiPt", branchBettiPointField);
+        
 
         cont::ArrayHandle<vtkm::Float64> branchIDPointField;
         branchIDPointField.Allocate(contourDataSet.GetNumberOfPoints());
@@ -1167,12 +1216,18 @@ void cv1k::interface::computeAdditionalBranchData(
         {
             branchPointVolumeArray.WritePortal().Set(branchId, 1);
             Id currentWeight = branchPointVolumeArray.ReadPortal().Get(branchId);
-            //Id weight = superarcIntrinsicWeight.ReadPortal().Get(i);
-            Id weight = superarcDependentWeight.ReadPortal().Get(i);
+            Id weight = superarcIntrinsicWeight.ReadPortal().Get(i); // 2026-02-23 - use INTRINSIC
+            //Id weight = superarcDependentWeight.ReadPortal().Get(i);
 
             branchPointVolumeArray.WritePortal().Set(branchId, currentWeight + weight);
         }
     }
+    
+	//for(int i = 0; i < branches.size(); i++)
+	//{
+		//originalBranchVolumeFloats[i] = branches[i]->VolumeFloat;
+		//filebranchvolumes << i << "\t" << branches[i]->VolumeFloat << std::endl;
+	//}
 
     //std::vector<std::tuple<vtkm::Id, vtkm::Id, vtkm::Id, vtkm::Float64>> branchEndpointsStd;
     std::vector<std::tuple<vtkm::Id, vtkm::Id, vtkm::Id, vtkm::FloatDefault>> branchEndpointsStd;
