@@ -57,7 +57,9 @@ vtkm::Id> cv1k::ct::getContourTree(cont::DataSet inputData, string fieldName)
 {
     // The actual CT Computation Happens in worklet/ContourTreeUniformAugmented::RunContourTree
     // Set up the filter Contour Tree
-    filter::scalar_topology::ContourTreeAugmented ctFilter(true, true);
+    bool useMarchingCubes = false; // previously hardcoded to "true"
+    //filter::scalar_topology::ContourTreeAugmented ctFilter(true, true);
+    filter::scalar_topology::ContourTreeAugmented ctFilter(useMarchingCubes, true);
     ctFilter.SetActiveField(fieldName);
 
     // It's better to have the contour tree directly than to have the packaged output of the filter

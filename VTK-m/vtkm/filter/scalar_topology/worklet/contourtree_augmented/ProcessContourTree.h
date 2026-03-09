@@ -335,6 +335,185 @@ public:
     std::vector<vtkm::UInt8> cubeBoundary;
 };
 
+struct FreudenthalConnectivityOutput
+{
+    std::vector<Edge> edges;
+    std::vector<vtkm::UInt8> edgeBoundary;
+
+    // Freudenthal splits quads into triangles, but if you need 4-node 
+    // arrays, we keep the size or transition to triangles. 
+    // Here we assume triangular faces for a true Freudenthal mesh.
+    std::vector<TriangleFace> faces; 
+    std::vector<vtkm::UInt8> faceBoundary;
+
+    // 3D Freudenthal uses Tetrahedra (4 nodes)
+    std::vector<std::array<vtkm::Id, 4>> tetrahedra;
+    std::vector<vtkm::UInt8> tetraBoundary;
+};
+
+
+FreudenthalConnectivityOutput static ExtractFreudenthalConnectivity(
+    const std::vector<vtkm::Id>& sortID,
+    const vtkm::cont::DataSet& input)
+{
+    FreudenthalConnectivityOutput result;
+
+    // --- Get structured cell set ---
+    auto cellSet = input.GetCellSet();
+    if (!cellSet.IsType<vtkm::cont::CellSetStructured<3>>())
+    {
+        throw std::runtime_error("Input must be 3D structured grid.");
+    }
+
+    auto structured = cellSet.AsCellSet<vtkm::cont::CellSetStructured<3>>();
+    vtkm::Id3 dims = structured.GetPointDimensions();
+    vtkm::Id nx = dims[0];
+    vtkm::Id ny = dims[1];
+    vtkm::Id nz = dims[2];
+
+    auto vid = [&](vtkm::Id i, vtkm::Id j, vtkm::Id k) -> vtkm::Id {
+        return i + j * nx + k * nx * ny;
+    };
+
+    // --- Helper to add sorted edges ---
+    auto addEdge = [&](vtkm::Id u, vtkm::Id v, bool isBoundary) {
+        vtkm::Id v0 = sortID[u];
+        vtkm::Id v1 = sortID[v];
+        if (v0 > v1) std::swap(v0, v1);
+        result.edges.push_back({v0, v1});
+        result.edgeBoundary.push_back(static_cast<vtkm::UInt8>(isBoundary));
+    };
+
+    // --- Helper to add sorted triangles ---
+    auto addTriangle = [&](vtkm::Id u, vtkm::Id v, vtkm::Id w, bool isBoundary) {
+        std::array<vtkm::Id, 3> nodes = {sortID[u], sortID[v], sortID[w]};
+        std::sort(nodes.begin(), nodes.end());
+        result.faces.push_back({nodes[0], nodes[1], nodes[2], isBoundary});
+        result.faceBoundary.push_back(static_cast<vtkm::UInt8>(isBoundary));
+    };
+
+    // ==========================================================
+    // 1. EDGES (Cubic + Face Diagonals + Body Diagonals)
+    // ==========================================================
+    for (vtkm::Id k = 0; k < nz; ++k) {
+        for (vtkm::Id j = 0; j < ny; ++j) {
+            for (vtkm::Id i = 0; i < nx; ++i) {
+                vtkm::Id v000 = vid(i, j, k);
+
+                // Axis Edges
+                if (i + 1 < nx) addEdge(v000, vid(i+1, j, k), (j==0 || j==ny-1 || k==0 || k==nz-1));
+                if (j + 1 < ny) addEdge(v000, vid(i, j+1, k), (i==0 || i==nx-1 || k==0 || k==nz-1));
+                if (k + 1 < nz) addEdge(v000, vid(i, j, k+1), (i==0 || i==nx-1 || j==0 || j==ny-1));
+
+                // Face Diagonals
+                if (i + 1 < nx && j + 1 < ny) addEdge(v000, vid(i+1, j+1, k), (k==0 || k==nz-1));
+                if (i + 1 < nx && k + 1 < nz) addEdge(v000, vid(i+1, j, k+1), (j==0 || j==ny-1));
+                if (j + 1 < ny && k + 1 < nz) addEdge(v000, vid(i, j+1, k+1), (i==0 || i==nx-1));
+
+                // Body Diagonal (0,0,0) -> (1,1,1)
+                if (i + 1 < nx && j + 1 < ny && k + 1 < nz)
+                    addEdge(v000, vid(i+1, j+1, k+1), false);
+            }
+        }
+    }
+
+// ==========================================================
+    // 2. FACES (Triangles)
+    // ==========================================================
+    for (vtkm::Id k = 0; k < nz - 1; ++k) {
+        for (vtkm::Id j = 0; j < ny - 1; ++j) {
+            for (vtkm::Id i = 0; i < nx - 1; ++i) {
+                
+                vtkm::Id p0 = vid(i,   j,   k);
+                vtkm::Id p1 = vid(i+1, j,   k);
+                vtkm::Id p2 = vid(i,   j+1, k);
+                vtkm::Id p3 = vid(i+1, j+1, k);
+                vtkm::Id p4 = vid(i,   j,   k+1);
+                vtkm::Id p5 = vid(i+1, j,   k+1);
+                vtkm::Id p6 = vid(i,   j+1, k+1);
+                vtkm::Id p7 = vid(i+1, j+1, k+1);
+
+                // --- 1. INTERFACE TRIANGLES (Shared between cubes) ---
+                // We add the two triangles for the "min" faces of each cube.
+                
+                // XY plane (Bottom face of cube)
+                addTriangle(p0, p1, p3, (k == 0));
+                addTriangle(p0, p2, p3, (k == 0));
+                // Cap the very top of the volume
+                if (k == nz - 2) {
+                    addTriangle(p4, p5, p7, true);
+                    addTriangle(p4, p6, p7, true);
+                }
+
+                // XZ plane (Front face of cube)
+                addTriangle(p0, p1, p5, (j == 0));
+                addTriangle(p0, p4, p5, (j == 0));
+                // Cap the very back of the volume
+                if (j == ny - 2) {
+                    addTriangle(p2, p3, p7, true);
+                    addTriangle(p2, p6, p7, true);
+                }
+
+                // YZ plane (Left face of cube)
+                addTriangle(p0, p2, p6, (i == 0));
+                addTriangle(p0, p4, p6, (i == 0));
+                // Cap the very right of the volume
+                if (i == nx - 2) {
+                    addTriangle(p1, p3, p7, true);
+                    addTriangle(p1, p5, p7, true);
+                }
+
+                // --- 2. STRICTLY INTERNAL TRIANGLES ---
+                // There are exactly 3 internal triangles per cube in the Kuhn split.
+                // These are the "blades" that meet at the main diagonal (p0-p7).
+                addTriangle(p0, p3, p7, false); // Diagonal plane through X-Y
+                addTriangle(p0, p5, p7, false); // Diagonal plane through X-Z
+                addTriangle(p0, p6, p7, false); // Diagonal plane through Y-Z
+            }
+        }
+    }
+    // ==========================================================
+    // 3. TETRAHEDRA & INTERNAL FACES
+    // ==========================================================
+    for (vtkm::Id k = 0; k < nz - 1; ++k) {
+        for (vtkm::Id j = 0; j < ny - 1; ++j) {
+            for (vtkm::Id i = 0; i < nx - 1; ++i) {
+                vtkm::Id p0 = vid(i,   j,   k);   // 000
+                vtkm::Id p1 = vid(i+1, j,   k);   // 100
+                vtkm::Id p2 = vid(i,   j+1, k);   // 010
+                vtkm::Id p3 = vid(i+1, j+1, k);   // 110
+                vtkm::Id p4 = vid(i,   j,   k+1); // 001
+                vtkm::Id p5 = vid(i+1, j,   k+1); // 101
+                vtkm::Id p6 = vid(i,   j+1, k+1); // 011
+                vtkm::Id p7 = vid(i+1, j+1, k+1); // 111
+
+                // Internal partition faces (non-boundary)
+                addTriangle(p0, p3, p7, false);
+                addTriangle(p0, p5, p7, false);
+                addTriangle(p0, p6, p7, false);
+
+                // Kuhn/Freudenthal Tetrahedra
+                std::vector<std::array<vtkm::Id, 4>> tets = {
+                    {p0, p1, p3, p7}, {p0, p1, p5, p7}, {p0, p2, p3, p7},
+                    {p0, p2, p6, p7}, {p0, p4, p5, p7}, {p0, p4, p6, p7}
+                };
+
+                bool cubeBoundary = (i == 0 || j == 0 || k == 0 || i == nx-2 || j == ny-2 || k == nz-2);
+
+                for (auto& t : tets) {
+                    std::array<vtkm::Id, 4> sortedTet;
+                    for(int n=0; n<4; ++n) sortedTet[n] = sortID[t[n]];
+                    std::sort(sortedTet.begin(), sortedTet.end());
+                    result.tetrahedra.push_back(sortedTet);
+                    result.tetraBoundary.push_back(static_cast<vtkm::UInt8>(cubeBoundary));
+                }
+            }
+        }
+    }
+
+    return result;
+}
+
 ConnectivityOutput static ExtractStructuredConnectivity(
 	const std::vector<vtkm::Id>& sortID,
     const vtkm::cont::DataSet& input)
@@ -599,6 +778,41 @@ void static PrintConnectivity(const ConnectivityOutput& c)
     }
 }
 
+void static PrintFreudenthalConnectivity(const FreudenthalConnectivityOutput& c)
+{
+    std::cout << "\n=== EDGES ===\n";
+    for (std::size_t i = 0; i < c.edges.size(); ++i)
+    {
+        std::cout << i << "\t"
+                  << c.edges[i].v0 << "\t"
+                  << c.edges[i].v1
+                  << "\t" << int(c.edgeBoundary[i])
+                  << "\n";
+    }
+
+    std::cout << "\n=== FACES ===\n";
+    for (std::size_t i = 0; i < c.faces.size(); ++i)
+    {
+        std::cout << i << "\t"
+                  << c.faces[i].v0 << "\t"
+                  << c.faces[i].v1 << "\t"
+                  << c.faces[i].v2 //<< "\t"
+                  //<< c.faces[i][3]
+                  << "\t" << int(c.faceBoundary[i])
+                  << "\n";
+    }
+
+    std::cout << "\n=== TETS ===\n";
+    for (std::size_t i = 0; i < c.tetrahedra.size(); ++i)
+    {
+        std::cout << i << "\t";
+        for (int v = 0; v < 4; ++v)
+            std::cout << c.tetrahedra[i][v] << "\t";
+
+        std::cout << int(c.tetraBoundary[i]) << "\n";
+    }
+}
+
 
 
 	// 2026-02-13 Betti computation with LU Stars (2004 Pascucci Parallel)
@@ -821,6 +1035,10 @@ void static LUstarsBettiMC(// INPUTS
 #endif
 
     }
+    
+    
+    
+
 
 
 std::vector<vtkm::Id> static ComputeSortIDStdVector(const vtkm::cont::DataSet& input)
@@ -923,9 +1141,11 @@ std::vector<vtkm::Id> static ComputeSortIDStdVector(const vtkm::cont::DataSet& i
         
         std::vector<vtkm::Id> sortIDLookup = ComputeSortIDStdVector(input);
         
-        ConnectivityOutput cubeConnectivity = ExtractStructuredConnectivity(sortIDLookup, input);
+        //ConnectivityOutput cubeConnectivity = ExtractStructuredConnectivity(sortIDLookup, input);
+        FreudenthalConnectivityOutput freudenthalConnectivity = ExtractFreudenthalConnectivity(sortIDLookup, input);
         
         //PrintConnectivity(cubeConnectivity);
+        //PrintFreudenthalConnectivity(freudenthalConnectivity);
         
         vtkm::cont::ArrayHandle<ValueType> dataField;
 	    input.GetField("values").GetData().AsArrayHandle(dataField);
@@ -968,12 +1188,34 @@ std::vector<vtkm::Id> static ComputeSortIDStdVector(const vtkm::cont::DataSet& i
         std::vector<int> deltaBoundary;
         
 		std::cout << "Running LUstars ..." << std::endl;
-		LUstarsBettiMC( contourTree.Arcs.GetNumberOfValues(),
-						cubeConnectivity, 
-						lowerStars,		// output
-						upperStars,		// output
-						deltaBoundary);	// output
+		//LUstarsBettiMC( contourTree.Arcs.GetNumberOfValues(),
+						//cubeConnectivity, 
+						//lowerStars,		// output
+						//upperStars,		// output
+						//deltaBoundary);	// output
+						
+		// Convert tetrahedra from vector<array<Id, 4>> to vector<vector<int>>
+		std::vector<std::vector<int>> tetsForLU;
+		tetsForLU.reserve(freudenthalConnectivity.tetrahedra.size());
+		for (const auto& tetArray : freudenthalConnectivity.tetrahedra)
+		{
+			tetsForLU.push_back({
+				static_cast<int>(tetArray[0]),
+				static_cast<int>(tetArray[1]),
+				static_cast<int>(tetArray[2]),
+				static_cast<int>(tetArray[3])
+			});
+		}
         
+		LUstars(contourTree.Arcs.GetNumberOfValues(),
+				freudenthalConnectivity.edges,
+				freudenthalConnectivity.faces,
+				tetsForLU,
+				lowerStars,
+				upperStars,
+				deltaBoundary
+			);
+				
         // ... 
         
 
@@ -1169,7 +1411,15 @@ std::vector<vtkm::Id> static ComputeSortIDStdVector(const vtkm::cont::DataSet& i
                 betti2 = 0; // no void, border detected
             }
 
-            betti1 = betti0 + betti2 - chi_xij[sortedNode];
+			// experiment: make delta chi = odd illegal:
+			if(chi_xij[sortedNode] % 2 != 0)
+			{
+				betti1 = previous_betti1;
+			}
+			else
+			{
+				betti1 = betti0 + betti2 - chi_xij[sortedNode];
+			}
 
 #if WRITE_FILES
             fileeulerchi << std::setw(10) << i_sortID << "->" << tailend << "\t" << chi_xij[sortedNode] << "\t" << be_ij[sortedNode]

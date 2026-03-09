@@ -53,12 +53,126 @@
 #include <vtkm/filter/scalar_topology/worklet/contourtree_augmented/processcontourtree/Branch.h>
 #include <vtkm/filter/scalar_topology/worklet/contourtree_augmented/processcontourtree/SetTriangleSuperarcId.h>
 
+// for running Marching Tetrahedra
+#include <vtkm/filter/geometry_refinement/Tetrahedralize.h>
+
 using BranchType = vtkm::worklet::contourtree_augmented::process_contourtree_inc::Branch<ValueType>;
 using Coefficients = vtkm::worklet::contourtree_augmented::Coefficients;
 
 
 using namespace std;
 using namespace vtkm;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+vtkm::cont::DataSet CreateFreudenthalDataSet(const vtkm::cont::DataSet& inputData)
+{
+    // 1. Get the structured cell set
+    auto cellSet = inputData.GetCellSet().AsCellSet<vtkm::cont::CellSetStructured<3>>();
+    vtkm::Id3 dims = cellSet.GetPointDimensions();
+    vtkm::Id nx = dims[0];
+    vtkm::Id ny = dims[1];
+    vtkm::Id nz = dims[2];
+
+    vtkm::Id numCubes = (nx - 1) * (ny - 1) * (nz - 1);
+    vtkm::Id numTets = numCubes * 6;
+
+    // 2. Connectivity Helper
+    auto vid = [&](vtkm::Id i, vtkm::Id j, vtkm::Id k) {
+        return i + j * nx + k * nx * ny;
+    };
+
+    // 3. Build the explicit connectivity array
+    // Every 4 entries in this handle represent one tetrahedron
+    vtkm::cont::ArrayHandle<vtkm::Id> connectivity;
+    connectivity.Allocate(numTets * 4);
+    auto portal = connectivity.WritePortal();
+
+    vtkm::Id tetCount = 0;
+    for (vtkm::Id k = 0; k < nz - 1; ++k) {
+        for (vtkm::Id j = 0; j < ny - 1; ++j) {
+            for (vtkm::Id i = 0; i < nx - 1; ++i) {
+                // Cube nodes
+                vtkm::Id p0 = vid(i,   j,   k);
+                vtkm::Id p1 = vid(i+1, j,   k);
+                vtkm::Id p2 = vid(i,   j+1, k);
+                vtkm::Id p3 = vid(i+1, j+1, k);
+                vtkm::Id p4 = vid(i,   j,   k+1);
+                vtkm::Id p5 = vid(i+1, j,   k+1);
+                vtkm::Id p6 = vid(i,   j+1, k+1);
+                vtkm::Id p7 = vid(i+1, j+1, k+1);
+
+                // Kuhn subdivision: Consistent with Freudenthal paths
+                // x->y->z, x->z->y, y->x->z, y->z->x, z->x->y, z->y->x
+                vtkm::Id subTets[6][4] = {
+                    {p0, p1, p3, p7}, {p0, p1, p5, p7}, {p0, p2, p3, p7},
+                    {p0, p2, p6, p7}, {p0, p4, p5, p7}, {p0, p4, p6, p7}
+                };
+
+                for (int t = 0; t < 6; ++t) {
+                    portal.Set(tetCount * 4 + 0, subTets[t][0]);
+                    portal.Set(tetCount * 4 + 1, subTets[t][1]);
+                    portal.Set(tetCount * 4 + 2, subTets[t][2]);
+                    portal.Set(tetCount * 4 + 3, subTets[t][3]);
+                    tetCount++;
+                }
+            }
+        }
+    }
+
+    // 4. Create the new CellSet
+    vtkm::cont::CellSetSingleType<> freudenthalCells;
+    freudenthalCells.Fill(inputData.GetNumberOfPoints(), 
+                          vtkm::CELL_SHAPE_TETRA, 
+                          4, 
+                          connectivity);
+
+    // 5. Construct new DataSet with original CoordinateSystem and Fields
+    vtkm::cont::DataSet output;
+    output.SetCellSet(freudenthalCells);
+    
+    for (vtkm::Id i = 0; i < inputData.GetNumberOfCoordinateSystems(); ++i) {
+        output.AddCoordinateSystem(inputData.GetCoordinateSystem(i));
+    }
+    
+    for (vtkm::Id i = 0; i < inputData.GetNumberOfFields(); ++i) {
+        output.AddField(inputData.GetField(i));
+    }
+
+    return output;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(vtkm::cont::DataSet inputData,
                                                                                std::string fieldName,
@@ -604,7 +718,11 @@ vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(v
 
     // Build the mesh
     vtkm::Id3 pointDimensions = inputData.GetCellSet().AsCellSet<vtkm::cont::CellSetStructured<3>>().GetPointDimensions();
-    worklet::contourtree_augmented::DataSetMeshTriangulation3DMarchingCubes mesh(vtkm::Id3(pointDimensions[0], pointDimensions[1], pointDimensions[2]));
+    // MARCHING CUBES MESH
+    //worklet::contourtree_augmented::DataSetMeshTriangulation3DMarchingCubes mesh(vtkm::Id3(pointDimensions[0], pointDimensions[1], pointDimensions[2]));
+    // IF FREUDENTHAL MESH
+    worklet::contourtree_augmented::DataSetMeshTriangulation3DFreudenthal mesh(vtkm::Id3(pointDimensions[0], pointDimensions[1], pointDimensions[2]));
+    
     //mesh.SortData(inputData.GetField(fieldName).GetData().AsArrayHandle<cont::ArrayHandle<Float64>>());
     mesh.SortData(inputData.GetField(fieldName).GetData().AsArrayHandle<cont::ArrayHandle<FloatDefault>>());
 
@@ -730,24 +848,25 @@ vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(v
     //flexIsosurfaces.emplace_back(2233, 0.0010836, 2); // manual inspection 128K
     //flexIsosurfaces.emplace_back(2233, 0.00108369, 1); // manual inspection 128K
     //flexIsosurfaces.emplace_back(2233, 0.00109757, 0); // manual inspection 128K
-    flexIsosurfaces.emplace_back(2233, 0.00101293,  48); // manual inspection 128K
-    flexIsosurfaces.emplace_back(2233, 0.001078530, 27); // manual inspection 128K
-    flexIsosurfaces.emplace_back(2233, 0.001078550, 8); // manual inspection 128K
-    flexIsosurfaces.emplace_back(2233, 0.001083690, 1); // manual inspection 128K
-    flexIsosurfaces.emplace_back(2233, 0.001088710, 4); // manual inspection 128K
-    flexIsosurfaces.emplace_back(2233, 0.001097930, 1); // manual inspection 128K
-    flexIsosurfaces.emplace_back(2233, 0.001109390, 2); // manual inspection 128K
-    flexIsosurfaces.emplace_back(2233, 0.001119590, 1); // manual inspection 128K
-    flexIsosurfaces.emplace_back(2233, 0.001137220, 10); // manual inspection 128K
-    flexIsosurfaces.emplace_back(2233, 0.001176060, 102); // manual inspection 128K
-    flexIsosurfaces.emplace_back(2233, 0.001204830, 28); // manual inspection 128K
-    flexIsosurfaces.emplace_back(2233, 0.001204830, 28); // manual inspection 128K
-    flexIsosurfaces.emplace_back(2233, 0.001208640, 7); // manual inspection 128K
-    flexIsosurfaces.emplace_back(2233, 0.001211560, 11); // manual inspection 128K
-    flexIsosurfaces.emplace_back(2233, 0.001216300, 1); // manual inspection 128K
+
+    //flexIsosurfaces.emplace_back(2233, 0.00101293,  48); // manual inspection 128K
+    //flexIsosurfaces.emplace_back(2233, 0.001078530, 27); // manual inspection 128K
+    //flexIsosurfaces.emplace_back(2233, 0.001078550, 8); // manual inspection 128K
+    //flexIsosurfaces.emplace_back(2233, 0.001083690, 1); // manual inspection 128K
+    //flexIsosurfaces.emplace_back(2233, 0.001088710, 4); // manual inspection 128K
+    //flexIsosurfaces.emplace_back(2233, 0.001097930, 1); // manual inspection 128K
+    //flexIsosurfaces.emplace_back(2233, 0.001109390, 2); // manual inspection 128K
+    //flexIsosurfaces.emplace_back(2233, 0.001119590, 1); // manual inspection 128K
+    //flexIsosurfaces.emplace_back(2233, 0.001137220, 10); // manual inspection 128K
+    //flexIsosurfaces.emplace_back(2233, 0.001176060, 102); // manual inspection 128K
+    //flexIsosurfaces.emplace_back(2233, 0.001204830, 28); // manual inspection 128K
+    //flexIsosurfaces.emplace_back(2233, 0.001204830, 28); // manual inspection 128K
+    //flexIsosurfaces.emplace_back(2233, 0.001208640, 7); // manual inspection 128K
+    //flexIsosurfaces.emplace_back(2233, 0.001211560, 11); // manual inspection 128K
+    //flexIsosurfaces.emplace_back(2233, 0.001216300, 1); // manual inspection 128K
 
 
-    vtkm::Id ring_branch = vals[1].second;//2260;
+    vtkm::Id ring_branch = 4394; //vals[1].second;//2260;
     //    flexIsosurfaces.emplace_back(ring_branch, 0.000920763, 41); // manual inspection 200K
 //    flexIsosurfaces.emplace_back(ring_branch, 0.00101375, 10); // manual inspection 200K
 //    flexIsosurfaces.emplace_back(ring_branch, 0.00101581, 6); // manual inspection 200K
@@ -791,7 +910,7 @@ vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(v
         if (branches[branchId]->BettiChanges.size() == 0)
         {
             // comment out if don't want to generate a surface unless has betti changes
-            flexIsosurfaces.emplace_back(branchId, branchIsovalue, -1);
+            //flexIsosurfaces.emplace_back(branchId, branchIsovalue, -1);
         }
 //        else // this adds ANY top Betti change (below changed so that only generates isovalues at Betti1==2
 //        {
@@ -805,6 +924,7 @@ vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(v
             // comment out if don't want to generate a surface unless has betti changes
             // (The following generates the 'root' isosurface, top/bottom of the branch holding the betti change surfaces)
             flexIsosurfaces.emplace_back(branchId, branchIsovalue, -1);
+            
 //            if (k > 0) // skip the main branch
             {
 //                vtkm::Id ring_branch = 12661; //6084; //1578; //70;
@@ -827,7 +947,7 @@ vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(v
                     if(2 == branches[branchId]->Betti1Numbers[i])
                     {
                         flexIsosurfaces.emplace_back(branchId, branches[branchId]->BettiChangesDataValue[i], branches[branchId]->Betti1Numbers[i]);
-                        break; // experiment - just get the first genus 1 surface per such branch
+                        //break; // experiment - just get the first genus 1 surface per such branch
                     }
                 }
             }
@@ -878,7 +998,21 @@ vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(v
     
     
     
-    
+    // IF RUNNING MARCHING TETRAHEDRA:
+// IF FREUDENTHAL
+// 1. Initialize the filter
+std::cout << "Tetrahedralising ... " << std::endl;
+vtkm::filter::geometry_refinement::Tetrahedralize tetFilter;
+
+// 2. Execute on your input DataSet
+// This returns a new DataSet where the CellSet is now a CellSetSingleType<vtkm::CellShapeTagTetra>
+//vtkm::cont::DataSet tetrahedralizedData = tetFilter.Execute(inputData);
+vtkm::cont::DataSet tetInputData = CreateFreudenthalDataSet(inputData);
+std::cout << "... Finished Tetrahedralising" << std::endl;
+
+
+
+
     
     
 
@@ -909,14 +1043,18 @@ vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(v
         }
 
         // Compute an isosurface for the whole data set
-        cont::ArrayHandle<cv1k::Triangle> mcTriangles = cv1k::mc::getMarchingCubeTriangles(inputData, {branchIsovalue}, fieldName);
+        //cont::ArrayHandle<cv1k::Triangle> mcTriangles = cv1k::mc::getMarchingCubeTriangles(inputData, {branchIsovalue}, fieldName);
+        
+ 
+
+       // not guaranteed to be Freudenthal (Delaunay)
+//cont::ArrayHandle<cv1k::Triangle> mcTriangles = cv1k::mc::getMarchingCubeTriangles(tetrahedralizedData, {branchIsovalue}, fieldName);
+cont::ArrayHandle<cv1k::Triangle> mcTriangles = cv1k::mc::getMarchingCubeTriangles(tetInputData, {branchIsovalue}, fieldName);
         
         
-		std::cout << "cheesing it" << std::endl;
         
         
-        
-// 1. Get your float data
+// 1. Get float data
 auto floatData = inputData.GetField(fieldName).GetData();
 
 // 2. Create a physical double array

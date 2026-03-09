@@ -271,6 +271,35 @@ public:
                      mesh,
                      computeRegularStructure,
                      mesh.GetMeshBoundaryExecutionObject());
+                     
+                     
+	 #if WRITE_FILES
+
+		  std::cout << "CT Completed on Freudenthal Mesh... " << std::endl;
+		  std::cout << "Writing ... CT-full-superdot.gv" << std::endl;
+          std::ofstream outFile("CT-full-superdot-freud.gv");
+
+		// for branch colourings (external py script)
+          vtkm::Id detailedMask =   vtkm::worklet::contourtree_distributed::SHOW_SUPER_STRUCTURE \
+                                  | vtkm::worklet::contourtree_distributed::SHOW_SUPERNODE_ID \
+                                  | vtkm::worklet::contourtree_distributed::SHOW_SUPERARC_ID \
+                                  | vtkm::worklet::contourtree_distributed::SHOW_MESH_SORT_ID \
+                                  | vtkm::worklet::contourtree_distributed::SHOW_SUPERPARENT \
+                                  | vtkm::worklet::contourtree_distributed::SHOW_DATA_VALUE; // additional
+
+          // Call the function after you've computed ContourTree and your associated data structures (`mesh` and `field`):
+          outFile << vtkm::worklet::contourtree_distributed::ContourTreeDotGraphPrintSerial(
+              "Contour Tree Super Dot",         // label/title
+              mesh,                             // mesh (re)constructed above
+              fieldArray, //fakeFieldArray, //fieldArray,     // scalar data array handle
+              contourTree,                      // computed contour tree structure
+              detailedMask,                     // detailed output with all info
+              vtkm::cont::ArrayHandle<vtkm::Id>()); // global ids
+
+
+          outFile.close();
+#endif
+                     
       return;
     }
   }
