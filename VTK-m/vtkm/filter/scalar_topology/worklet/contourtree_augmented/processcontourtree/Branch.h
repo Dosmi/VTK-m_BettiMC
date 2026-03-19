@@ -615,9 +615,25 @@ std::cout << "Printing the supernode/branch mappings" << std::endl;
 	//}
 
 	//std::cout << "Num. Betti changes: " << supernodeBettiPortal.GetNumberOfValues() << std::endl;
+	
+	branches[i]->TopBetti1Number = -1; // sentinel
 
     for(int j = 0; j < branch_SP_map[i].size(); j+=3) //j++)
     {
+		// just check if the branch already starts at an existing supernode with betti1 = 2 
+		// (-2 because we label existing unaugmented supernode bettis as negative to distinguish) 
+		// test against sentinel -1 value just to keep ONE top branch betti
+		
+		if ( (j==0) && (supernodeBettiPortal.GetNumberOfValues() > 0) )
+        {
+			//filebsp << supernodeBettiPortal.Get(branch_SP_map[i][j]) << "\t"; //"(" << dataFieldPortal.Get(branch_SP_map[i][j]) << ")";
+			if( ( 2 == supernodeBettiPortal.Get(branch_SP_map[i][j]) ) || ( -2 == supernodeBettiPortal.Get(branch_SP_map[i][j]) ) && (-1 == branches[i]->TopBetti1Number) ) 
+			{// only care about betti1 = 2, so only capture that (if a branch starts with anything else, not useful anyway)
+				branches[i]->TopBetti1Number = -2;
+			}
+		}
+
+		
 		//std::cout << "branch_SP_map[i].size() = " << branch_SP_map[i].size() << std::endl;
 		//std::cout << "branch_SP_map[i][" << j << "] = " << branch_SP_map[i][j] << std::endl;
 		//std::cout << "sortOrderPortal.Get(branch_SP_map[i][j]) = "  << sortOrderPortal.Get(branch_SP_map[i][j]) << std::endl;
@@ -652,7 +668,7 @@ std::cout << "Printing the supernode/branch mappings" << std::endl;
             //branches[i]->BettiArcVolumes.push_back(superarcIntrinsicWeightPortal.Get(branch_SP_map[i][j])); // back to integer weights
             if(supernodeBettiPortal.GetNumberOfValues() > 0)
             {
-				branches[i]->Betti1Numbers.push_back(supernodeBettiPortal.Get(branch_SP_map[i][j]));
+				branches[i]->Betti1Numbers.push_back( supernodeBettiPortal.Get(branch_SP_map[i][j]) );
 			}
 
             // add an additional filter just to get Betti1 changes:
@@ -661,7 +677,10 @@ std::cout << "Printing the supernode/branch mappings" << std::endl;
             {
                 TopBettiChange = supernodeBettiPortal.Get(branch_SP_map[i][j]);
                 TopBettiArcVolume = superarcIntrinsicWeightPortal.Get(branch_SP_map[i][j]);
-                branches[i]->TopBetti1Number = supernodeBettiPortal.Get(branch_SP_map[i][j]);     // Betti value of the branch
+                
+                // used to track the betti with biggest volume - now TopBetti represents the branch top betti number (start/tailend)
+                //branches[i]->TopBetti1Number = supernodeBettiPortal.Get(branch_SP_map[i][j]);     // Betti value of the branch
+                
                 //branches[i]->TopBettiChangeDataValue = valueFieldPortal.Get( supernodesPortal.Get(sortOrderPortal.Get(branch_SP_map[i][j])) );    // Betti value of the branch
                 branches[i]->TopBettiChangeDataValue = valueFieldPortal.Get( regularIDbr );    // Betti value of the branch
             }

@@ -54,6 +54,9 @@
 //#include <vtkm/cont/DataSetFieldAdd.h> deprecated since VTK 1.6 https://gitlab.kitware.com/vtk/vtk-m/-/releases/v1.6.0
 #include <vtkm/cont/DataSetBuilderUniform.h>
 
+// write out as binary .vtp files (legacy .vtk are too slow to read on ParaView, especially in ASCII)
+//#include <vtkm/io/VTKXMLDataSetWriter.h>
+
 //#define DEBUG_PRINT
 
 using namespace std;
@@ -324,12 +327,18 @@ int main(int argc, char* argv[])
 
 
     fieldName = inputData.GetPointField(fieldName).GetName();
+    
+	// Red text formatting for highlighting some console output:
+    const std::string RED = "\033[31m";  // Start red text
+    const std::string ORANGE = "\033[38;2;255;165;0m";  // Start red text
+    const std::string YELLOW = "\033[38;2;240;240;13m";  // Warm, readable yellow
+    const std::string RESET = "\033[0m"; // End red text
 
 
     // 
     // Only callled to write the ct to file
     //
-    if (false == outputCTFilename.empty())
+    if (true == outputFilename.empty())
     {
         
         worklet::contourtree_augmented::ContourTree ct2;
@@ -343,6 +352,11 @@ int main(int argc, char* argv[])
 
         return 0;
     }
+    else
+    {
+		std::cout << RED << "Warning - no output name given, specify it with -o output. Example:\n";
+		std::cout << "OMP_NUM_THREADS=1 ./ContourVisualiser -f ../Data/out_hh_128_coarsened_ascii.txt -o output -t 100 --decompositionType volume" << RESET << std::endl;
+	}
 
     std::cout << "ComputeMostSignificantContours" << std::endl;
     vtkm::cont::PartitionedDataSet outputDataSets = cv1k::interface::computeMostSignificantContours(inputData,
@@ -353,6 +367,10 @@ int main(int argc, char* argv[])
                                                                                                     selectionType,
                                                                                                     branchIsovalue,
                                                                                                     performanceTestOnly);
+                                                                                                    
+	std::cout << "Finished ComputeMostSignificantContours ... " << std::endl;
+	
+
 
     if (false == outputFilename.empty())
     {
@@ -408,7 +426,16 @@ int main(int argc, char* argv[])
             cout << "The output filename is " << currentFilename << endl;
 
             vtkm::io::VTKDataSetWriter writer(currentFilename);
+			// Set the writer to binary mode
+			writer.SetFileTypeToBinary(); // NEW
             writer.WriteDataSet(outputDataSets.GetPartition(i));
+            
+            // didnt work
+			//vtkm::io:: writer(currentFilename + ".vtp");
+			//writer.WriteDataSet(outputDataSets.GetPartition(i));
+			
+
+						
 
             //
             // Save Images (Cinema Database)
@@ -427,6 +454,11 @@ int main(int argc, char* argv[])
             //                    );
         }
     }
+    else
+    {
+		std::cout << RED << "Warning - no output name given, specify it with -o output. Example:\n";
+		std::cout << "OMP_NUM_THREADS=1 ./ContourVisualiser -f ../Data/out_hh_128_coarsened_ascii.txt -o output -t 100 --decompositionType volume" << RESET << std::endl;
+	}
 
     return 0;
 }

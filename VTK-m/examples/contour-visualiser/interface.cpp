@@ -866,7 +866,7 @@ vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(v
     //flexIsosurfaces.emplace_back(2233, 0.001216300, 1); // manual inspection 128K
 
 
-    vtkm::Id ring_branch = 4394; //vals[1].second;//2260;
+    vtkm::Id ring_branch = vals[1].second;//2260;
     //    flexIsosurfaces.emplace_back(ring_branch, 0.000920763, 41); // manual inspection 200K
 //    flexIsosurfaces.emplace_back(ring_branch, 0.00101375, 10); // manual inspection 200K
 //    flexIsosurfaces.emplace_back(ring_branch, 0.00101581, 6); // manual inspection 200K
@@ -907,11 +907,17 @@ vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(v
 //            }
 //        }
 
-        if (branches[branchId]->BettiChanges.size() == 0)
+        //if (branches[branchId]->BettiChanges.size() == 0)
+        //{
+            //// comment out if don't want to generate a surface unless has betti changes
+            ////flexIsosurfaces.emplace_back(branchId, branchIsovalue, -1);
+        //}
+        
+        if ( (branches[branchId]->BettiChanges.size() == 0) && (-2 == branches[branchId]->TopBetti1Number))
         {
-            // comment out if don't want to generate a surface unless has betti changes
-            //flexIsosurfaces.emplace_back(branchId, branchIsovalue, -1);
-        }
+			flexIsosurfaces.emplace_back(branchId, branchIsovalue, branches[branchId]->TopBetti1Number);
+		}
+		
 //        else // this adds ANY top Betti change (below changed so that only generates isovalues at Betti1==2
 //        {
 //            flexIsosurfaces.emplace_back(branchId, branchIsovalue, -1);
@@ -919,11 +925,19 @@ vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(v
 //        }
 
         // ALL Betti Changes
-        else
+        //else
+        if (branches[branchId]->BettiChanges.size() > 0) // prioritize >0 surfaces, only generate parent surface if there's no changes
         {
             // comment out if don't want to generate a surface unless has betti changes
             // (The following generates the 'root' isosurface, top/bottom of the branch holding the betti change surfaces)
-            flexIsosurfaces.emplace_back(branchId, branchIsovalue, -1);
+            //flexIsosurfaces.emplace_back(branchId, branchIsovalue, -1);
+            
+			if (-2 == branches[branchId]->TopBetti1Number)
+			{
+				// if the branch already starts at a ring contour, we're done - just write that 
+				flexIsosurfaces.emplace_back(branchId, branchIsovalue, branches[branchId]->TopBetti1Number);
+				continue;
+			}
             
 //            if (k > 0) // skip the main branch
             {
@@ -944,13 +958,20 @@ vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(v
 
                 for(int i = 0; i < branches[branchId]->BettiChanges.size(); i++)
                 {
-                    if(2 == branches[branchId]->Betti1Numbers[i])
+                    //if(2 == branches[branchId]->Betti1Numbers[i])
+                    if( (2 == branches[branchId]->Betti1Numbers[i]) || (-2 == branches[branchId]->Betti1Numbers[i]) )
                     {
                         flexIsosurfaces.emplace_back(branchId, branches[branchId]->BettiChangesDataValue[i], branches[branchId]->Betti1Numbers[i]);
-                        //break; // experiment - just get the first genus 1 surface per such branch
+                        break; // experiment - just get the first genus 1 surface per such branch
                     }
                 }
             }
+        }
+        // experiment - only generate surface in the 0 betti changes case 
+		else if (branches[branchId]->BettiChanges.size() == 0)
+        {
+            // comment out if don't want to generate a surface unless has betti changes
+            flexIsosurfaces.emplace_back(branchId, branchIsovalue, -1);
         }
 
 //        else
@@ -1169,6 +1190,102 @@ cv1k::filter::computeTriangleIds(ct, mesh, extrema, materializedDoubles, mcTrian
             connectivity.push_back(i * 3 + 1);
             connectivity.push_back(i * 3 + 2);
         }
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+// ----------------- 1. Calculate Mesh Centroid ----------------- //
+vtkm::Vec3f_64 centroid{ 0.0, 0.0, 0.0 };
+vtkm::Id totalPoints = static_cast<vtkm::Id>(branchTriangles.size() * 3);
+
+for (const auto& tri : branchTriangles) {
+    for (int j = 0; j < 3; ++j) {
+        centroid = centroid + tri.points[j]; // Vector addition
+    }
+}
+
+if (totalPoints > 0) {
+    // Scalar division (Fixes the previous error)
+    centroid = centroid / static_cast<vtkm::Float64>(totalPoints);
+}
+
+// ----------------- 2. Spherical Occupancy Mapping ----------------- //
+const int nBins = 36; // 10-degree resolution
+std::vector<bool> lonBins(nBins, false); // Longitude (-PI to PI)
+std::vector<bool> latBins(nBins, false); // Latitude (0 to PI)
+
+for (const auto& tri : branchTriangles) {
+    for (int j = 0; j < 3; ++j) {
+        vtkm::Vec3f_64 v = tri.points[j] - centroid;
+        vtkm::Float64 r = vtkm::Magnitude(v);
+
+        if (r > 1e-8) {
+            // Longitude (Angle around the vertical axis)
+            vtkm::Float64 theta = vtkm::ATan2(v[1], v[0]); 
+            // Latitude (Angle from the top pole)
+            vtkm::Float64 phi = vtkm::ACos(vtkm::Clamp(v[2] / r, -1.0, 1.0)); 
+
+            // Map to bin indices
+            int bTheta = static_cast<int>((theta + vtkm::Pi()) / (2.0 * vtkm::Pi()) * nBins) % nBins;
+            int bPhi = static_cast<int>(phi / vtkm::Pi() * nBins) % nBins;
+
+            lonBins[bTheta] = true;
+            latBins[bPhi] = true;
+        }
+    }
+}
+
+// ----------------- 3. Compute Donut Metrics ----------------- //
+
+// A: Longitude Coverage (Is it a full 360-degree loop?)
+double lonCoverage = 0;
+for (bool hit : lonBins) if (hit) lonCoverage += (1.0 / nBins);
+
+// B: Polar Cleanliness (Is the center 'hole' empty?)
+// We check if triangles exist in the top/bottom 15% of the latitude range.
+int polarHits = 0;
+int checkRange = nBins / 6; // Check roughly 30 degrees at each pole
+for (int i = 0; i < checkRange; ++i) {
+    if (latBins[i]) polarHits++;           // North Pole (Top)
+    if (latBins[nBins - 1 - i]) polarHits++; // South Pole (Bottom)
+}
+double polarCleanliness = 1.0 - (static_cast<double>(polarHits) / (2.0 * checkRange));
+
+// C: The Final Index
+// 1.0 = Perfect Donut, 0.0 = Blob or Fragment
+vtkm::Float64 donutIndex = lonCoverage * polarCleanliness;
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
 
 
 
@@ -1192,24 +1309,25 @@ cv1k::filter::computeTriangleIds(ct, mesh, extrema, materializedDoubles, mcTrian
         
         
         
+		//// 2026-03-18 turned off to save storage/memory
+        //cont::ArrayHandle<int> branchIDCellField;
+        //branchIDCellField.Allocate(contourDataSet.GetNumberOfCells());
+        //auto branchIDCellFieldWritePortal = branchIDCellField.WritePortal();
+        //for (int i = 0 ; i < branchIDCellField.GetNumberOfValues() ; i++)
+        //{
+            //branchIDCellFieldWritePortal.Set(i, branchId);
+        //}
+        //contourDataSet.AddCellField("branchId", branchIDCellField);
 
-        cont::ArrayHandle<int> branchIDCellField;
-        branchIDCellField.Allocate(contourDataSet.GetNumberOfCells());
-        auto branchIDCellFieldWritePortal = branchIDCellField.WritePortal();
-        for (int i = 0 ; i < branchIDCellField.GetNumberOfValues() ; i++)
-        {
-            branchIDCellFieldWritePortal.Set(i, branchId);
-        }
-        contourDataSet.AddCellField("branchId", branchIDCellField);
-
-        cont::ArrayHandle<int> importanceCellField;
-        importanceCellField.Allocate(contourDataSet.GetNumberOfCells());
-        auto importanceCellFieldWritePortal = importanceCellField.WritePortal();
-        for (int i = 0 ; i < importanceCellField.GetNumberOfValues() ; i++)
-        {
-            importanceCellFieldWritePortal.Set(i, k);
-        }
-        contourDataSet.AddCellField("importance", importanceCellField);
+		//// 2026-03-18 turned off to save storage/memory
+        //cont::ArrayHandle<int> importanceCellField;
+        //importanceCellField.Allocate(contourDataSet.GetNumberOfCells());
+        //auto importanceCellFieldWritePortal = importanceCellField.WritePortal();
+        //for (int i = 0 ; i < importanceCellField.GetNumberOfValues() ; i++)
+        //{
+            //importanceCellFieldWritePortal.Set(i, k);
+        //}
+        //contourDataSet.AddCellField("importance", importanceCellField);
 
 
         cont::ArrayHandle<vtkm::Float64> isovalueCellField;
@@ -1236,16 +1354,33 @@ cv1k::filter::computeTriangleIds(ct, mesh, extrema, materializedDoubles, mcTrian
         // ----------------- Write Point Data (shown first) ----------------- //
         
         
+        
+		cont::ArrayHandle<vtkm::Float64> donutIndexPointField;
+        donutIndexPointField.Allocate(contourDataSet.GetNumberOfPoints());
+        auto donutIndexPointFieldWritePortal = donutIndexPointField.WritePortal();
+        for (int i = 0 ; i < donutIndexPointField.GetNumberOfValues() ; i++)
+        {
+            //branchBettiPointFieldWritePortal.Set(i, branchBetti);//0.5);
+            donutIndexPointFieldWritePortal.Set(i, donutIndex);//0.5);
+        }
+		
+		contourDataSet.AddPointField("adonutIndexPt", donutIndexPointField);
+        
+        
+        
+        
 		cont::ArrayHandle<vtkm::Float64> branchBettiPointField;
         branchBettiPointField.Allocate(contourDataSet.GetNumberOfPoints());
         auto branchBettiPointFieldWritePortal = branchBettiPointField.WritePortal();
         for (int i = 0 ; i < branchBettiPointField.GetNumberOfValues() ; i++)
         {
             branchBettiPointFieldWritePortal.Set(i, branchBetti);//0.5);
+            //branchBettiPointFieldWritePortal.Set(i, donutIndex);//0.5);
         }
 		
 		contourDataSet.AddPointField("branchBettiPt", branchBettiPointField);
         
+		
 
         cont::ArrayHandle<vtkm::Float64> branchIDPointField;
         branchIDPointField.Allocate(contourDataSet.GetNumberOfPoints());
