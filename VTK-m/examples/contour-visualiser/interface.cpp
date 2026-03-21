@@ -64,7 +64,7 @@ using namespace std;
 using namespace vtkm;
 
 
-
+#define WRITE_FILES 0
 
 
 
@@ -188,6 +188,8 @@ vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(v
     int debugLevel = 1;
     
 	// Red text formatting for highlighting some console output:
+	const std::string GREEN = "\033[38;2;50;205;50m";
+	const std::string DARKGREEN = "\033[38;2;34;139;34m";
     const std::string RED = "\033[31m";  // Start red text
     const std::string ORANGE = "\033[38;2;255;165;0m";  // Start red text
     const std::string YELLOW = "\033[38;2;240;240;13m";  // Warm, readable yellow
@@ -221,10 +223,10 @@ vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(v
 
     timer.Stop();
 
-    if (debugLevel >= 1)
-    {
-        //std::cout << "Computing CT took " << timer.GetElapsedTime() << " seconds." << std::endl;
-    }
+    //if (debugLevel >= 1)
+    //{
+        std::cout << GREEN << "Computing CT took " << timer.GetElapsedTime() << " seconds." << RESET << std::endl;
+    //}
 
     //
     // Compute Branch Decomposition
@@ -290,7 +292,10 @@ vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(v
 	  vtkm::cont::ArrayHandle<Coefficients> hyperarcDependentWeightBetti;
 
 
-	  std::cout << YELLOW << "\n[STAGE 3.5 Start - Coeff. Weights (IDThD)] ContourTreeApp.cxx:ComputeVolumeWeightsSerialStructCoefficients START ..." << RESET << std::endl;
+	  std::cout << YELLOW << "\n[STAGE 3.5 Start - Coeff. Weights (IDThD)] ContourTreeApp.cxx:ComputeBettiNumbersForRegularArcs START ..." << RESET << std::endl;
+	  
+	  vtkm::cont::Timer timerComputeBettiNumbersForRegularArcs;
+	  timerComputeBettiNumbersForRegularArcs.Start();
 	  
 	  using ValueType = vtkm::Float32;
 
@@ -320,7 +325,11 @@ vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(v
 	  //    CALLGRIND_STOP_INSTRUMENTATION;
 	  //    CALLGRIND_DUMP_STATS;
 
-	  std::cout << YELLOW << "[STAGE 3.5 End - Coeff. Weights (IDThD)] ContourTreeApp.cxx:ComputeVolumeWeightsSerialStructCoefficients ... END\n" << RESET << std::endl;
+	  std::cout << YELLOW << "[STAGE 3.5 End - Coeff. Weights (IDThD)] ContourTreeApp.cxx:ComputeBettiNumbersForRegularArcs ... END\n" << RESET << std::endl;
+	  
+	  timerComputeBettiNumbersForRegularArcs.Stop();
+	  
+	  std::cout << GREEN << "ComputeBettiNumbersForRegularArcs took " << timerComputeBettiNumbersForRegularArcs.GetElapsedTime() << " seconds." << RESET << std::endl << std::endl;
 
 	}
 		
@@ -341,6 +350,14 @@ vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(v
 		
 		
         std::cout << "Branch Weights Chosen: VOLUME" << std::endl;
+
+	    // Time branch decompostion: Volume Weight Computation:
+	    vtkm::cont::Timer timerBranchDecomposition;
+	    timerBranchDecomposition.Start();
+        
+		// Time branch decompostion: Volume Weight Computation:
+	    vtkm::cont::Timer timerComputeVolumeWeightsSerial;
+	    timerComputeVolumeWeightsSerial.Start();
         worklet::contourtree_augmented::ProcessContourTree::ComputeVolumeWeightsSerial(
                 ct,
                 ctNumIterations,
@@ -349,7 +366,12 @@ vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(v
                 supernodeTransferWeight,
                 hyperarcDependentWeigh
                 );
+		timerComputeVolumeWeightsSerial.Stop();
+		std::cout << DARKGREEN << "ComputeVolumeWeightsSerial took " << timerComputeVolumeWeightsSerial.GetElapsedTime() << " seconds." << RESET << std::endl;
 
+		// Time branch decompostion: Volume Weight Computation:
+	    vtkm::cont::Timer timerComputeVolumeBranchDecompositionSerial;
+	    timerComputeVolumeBranchDecompositionSerial.Start();
         worklet::contourtree_augmented::ProcessContourTree::ComputeVolumeBranchDecompositionSerial(
                 ct,
                 superarcDependentWeight,
@@ -360,6 +382,9 @@ vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(v
                 branchSaddle,
                 branchParent
                 );
+                
+		timerComputeVolumeBranchDecompositionSerial.Stop();
+		std::cout << DARKGREEN << "ComputeVolumeBranchDecompositionSerial took " << timerComputeVolumeBranchDecompositionSerial.GetElapsedTime() << " seconds." << RESET << std::endl;
                 
 		auto valueField = inputData.GetPointField("values")
 							//.GetDataAsDefaultFloat()
@@ -374,6 +399,10 @@ vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(v
         vtkm::Id nBranches = branchSaddle.GetNumberOfValues();
         // branches array defined above
         branches.reserve(static_cast<std::size_t>(nBranches));
+                
+		// Time branch decompostion: Volume Weight Computation:
+	    vtkm::cont::Timer timerComputeBranchDecomposition;
+	    timerComputeBranchDecomposition.Start();
                 
 		//BranchType* branchDecompostionRoot = defined above
 		branchDecompostionRoot =
@@ -399,17 +428,33 @@ vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(v
 					ct.SupernodeBetti, // used to get the augmented betti nodes (which are past the root node in index)
 					  branches); // output
 					  
+		timerComputeBranchDecomposition.Stop();
+		std::cout << DARKGREEN << "ComputeBranchDecomposition took " << timerComputeBranchDecomposition.GetElapsedTime() << " seconds." << RESET << std::endl;
+                
+					  
 					  
 		        //std::vector<ValueType> originalBranchVolumeFloats;
 		        std::vector<vtkm::Id> originalBranchVolumeFloats;
         originalBranchVolumeFloats.resize(branches.size());
 
+#if WRITE_FILES
         std::ofstream filebranchvolumes("ContourTreeBranches--BranchVolumes-NoBetti.txt");
+#endif 
         for(int i = 0; i < branches.size(); i++)
         {
             originalBranchVolumeFloats[i] = branches[i]->Volume;
+#if WRITE_FILES
             filebranchvolumes << i << "\t" << branches[i]->Volume << std::endl;
+#endif
         }
+#if WRITE_FILES
+        std::cout << ORANGE  << "Written: ContourTreeBranches--BranchVolumes-NoBetti.txt" << RESET<< std::endl;
+#endif
+
+		timerBranchDecomposition.Stop();
+		std::cout << GREEN << std::endl << "ComputeBranchDecomposition took " << timerBranchDecomposition.GetElapsedTime() << " seconds." << RESET << std::endl << std::endl;
+		timerBranchDecomposition.Reset();
+        timerBranchDecomposition.Start();
 
 
         std::cout << "ct.root = " << ct.Rootnode << " ctBetti.root = " << ctBetti.Rootnode << " original.root = " << originalRoot << std::endl;
@@ -498,7 +543,7 @@ vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(v
             auto bt_whichBranchPortal = bt_whichBranch.WritePortal();
             auto whichBranchPortal = whichBranch.WritePortal();
 
-//#if WRITE_FILES
+#if WRITE_FILES
             std::ofstream file1("ContourTreeGraph--original-fullCT-SN-TO-BRANCH-COLLAPSED.txt");
 
             for (vtkm::Id branchID = 0; branchID < whichBranch.GetNumberOfValues(); branchID++)
@@ -507,7 +552,9 @@ vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(v
                 file1 << branchID << "," << whichBranchPortal.Get(branchID) << std::endl;
             }
             file1.close();
-//#endif
+            
+            std::cout << ORANGE  << "Written: ContourTreeGraph--original-fullCT-SN-TO-BRANCH-COLLAPSED.txt" << RESET<< std::endl;
+#endif
 
 //            for(int i = 0; i < whichBranch.GetNumberOfValues(); i++)
             for(int i = 0; i < bt_whichBranch.GetNumberOfValues(); i++)
@@ -533,7 +580,7 @@ vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(v
                 whichBranchPortalModified.Set(i, bt_whichBranchPortal.Get(i));
             }
 
-//#if WRITE_FILES
+#if WRITE_FILES
             std::ofstream file("ContourTreeGraph--Betti-fullCT-SN-TO-BRANCH-COLLAPSED.txt");
 
             for (vtkm::Id branchID = 0; branchID < whichBranch.GetNumberOfValues(); branchID++)
@@ -542,7 +589,8 @@ vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(v
                 file << branchID << "," << whichBranchPortalModified.Get(branchID) << std::endl;
             }
             file.close();
-//#endif
+            std::cout << ORANGE  << "Written: ContourTreeGraph--Betti-fullCT-SN-TO-BRANCH-COLLAPSED.txt" << RESET<< std::endl;
+#endif
 
 
 
@@ -586,6 +634,11 @@ vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(v
                 branches[i]->Volume = originalBranchVolumeFloats[i];
             }
 
+			
+			
+			timerBranchDecomposition.Stop();
+			std::cout << GREEN << std::endl << "ComputeBranchDecomposition took " << timerBranchDecomposition.GetElapsedTime() << " seconds." << RESET << std::endl << std::endl;
+			//timerBranchDecomposition.Reset();
 
 
             ct = ctBetti;
@@ -737,8 +790,7 @@ vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(v
 
     if (debugLevel >= 1)
     {
-        std::cout << "Computing Mesh and Extrema took " << timer.GetElapsedTime() << " seconds." << std::endl;
-        cout << "Branch Decomposition ..." << endl;
+        std::cout << std::endl << GREEN << "Computing Mesh and Extrema took " << timer.GetElapsedTime() << " seconds." << RESET << std::endl << std::endl;
     }
 
 
@@ -880,7 +932,7 @@ vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(v
     
     
     
-        for (int k = 0 ; k < numberOfBranches; k++)
+	for (int k = 0 ; k < numberOfBranches; k++)
     {
         std::cout << "k=" << k << std::endl;
         //
@@ -954,6 +1006,7 @@ vtkm::cont::PartitionedDataSet cv1k::interface::computeMostSignificantContours(v
                                         << "\t" << branches[ring_branch]->BettiChangesDataValue[betti_i] << std::endl;
                     }
                     file.close();
+                    std::cout << ORANGE  << "Written: " << "ContourTreeBetti--branch-"+std::to_string(ring_branch)+"plot.txt" << RESET<< std::endl;
                 }
 
                 for(int i = 0; i < branches[branchId]->BettiChanges.size(); i++)

@@ -91,7 +91,8 @@
 #include <unistd.h>
 
 #define DEBUG_PRINT_PACTBD 0
-#define WRITE_FILES 1
+#define WRITE_FILES 0
+#define WRITE_EXTRA_FILES 0
 
 
 namespace process_contourtree_inc_ns =
@@ -1133,6 +1134,16 @@ std::vector<vtkm::Id> static ComputeSortIDStdVector(const vtkm::cont::DataSet& i
                                                   FloatArrayType& supernodeTransferWeight, // (output)
                                                   FloatArrayType& hyperarcDependentWeight) // (output))
     { // ComputeBettiNumbersForRegularArcs()
+		
+		// Red text formatting for highlighting some console output:
+		const std::string GREEN = "\033[38;2;50;205;50m";
+		const std::string DARKGREEN = "\033[38;2;34;139;34m";
+		const std::string RED = "\033[31m";  // Start red text
+		const std::string ORANGE = "\033[38;2;255;165;0m";  // Start red text
+		const std::string YELLOW = "\033[38;2;240;240;13m";  // Warm, readable yellow
+		const std::string RESET = "\033[0m"; // End red text	
+
+		
         std::cout << "[ProcessContourTree.h::ComputeBettiNumbersForRegularArcs] Compute Betti Numbers for each Regular Arc" << std::endl;
         printMemoryUsage("[ProcessContourTree.h::ComputeVolumeWeightsSerialStructCoefficients] Checkpoint 1/4 - START");
 
@@ -1492,8 +1503,11 @@ std::vector<vtkm::Id> static ComputeSortIDStdVector(const vtkm::cont::DataSet& i
             previous_betti1 = betti1;
         }
 
+#if WRITE_FILES
+		std::cout << ORANGE  << "Written: ContourTreeEulerChi.txt" << RESET<< std::endl;
+#endif
 
-#if DEBUG_PRINT_PACTBD
+#if WRITE_FILES
         std::ofstream fileregbetti("ContourTreeBetti--RegToBetti.txt");
         std::cout << "Augment the tree with Betti Numbers ..." << std::endl;
 
@@ -1506,11 +1520,12 @@ std::vector<vtkm::Id> static ComputeSortIDStdVector(const vtkm::cont::DataSet& i
 
         for(int i = 0; i < nodes_to_relabel_regularID.size(); i++)
         {
-            std::cout << nodes_to_relabel_regularID[i] << "\t" << nodes_to_relabel_regularID_betti_1[i] << std::endl;
+            //std::cout << nodes_to_relabel_regularID[i] << "\t" << nodes_to_relabel_regularID_betti_1[i] << std::endl;
             fileregbetti << nodes_to_relabel_regularID[i] << "\t" << nodes_to_relabel_regularID_betti_1[i] << std::endl;
         }
 
         //std::this_thread::sleep_for(std::chrono::seconds(3));
+        std::cout << ORANGE  << "Written: ContourTreeBetti--RegToBetti.txt" << RESET<< std::endl;
 #endif
 
         // Augment the tree with Betti Numbers
@@ -1518,129 +1533,130 @@ std::vector<vtkm::Id> static ComputeSortIDStdVector(const vtkm::cont::DataSet& i
 //        betti_augmenter.Initialize(block, &hierarchicalTrees[block], &augmentedTrees[block], &meshes[block]);
 //        betti_augmenter.BuildAugmentedTree();
 
-#if DEBUG_PRINT_PACTBD
+#if WRITE_EXTRA_FILES
 
         std::ofstream filebettiaug("ContourTreeBetti--BettiAugmentation.txt");
+        
 
         auto augNodesPortal = contourTree.Augmentnodes.ReadPortal();
         auto augArcsPortal = contourTree.Augmentarcs.ReadPortal();
         auto transferPortal = contourTree.WhenTransferred.ReadPortal();
 
-        std::cout << "Augmented Nodes (" << augNodesPortal.GetNumberOfValues() << ")" << std::endl;
+        //std::cout << "Augmented Nodes (" << augNodesPortal.GetNumberOfValues() << ")" << std::endl;
         filebettiaug << "Augmented Nodes (" << augNodesPortal.GetNumberOfValues() << ")" << std::endl;
         for(int i = 0; i < augNodesPortal.GetNumberOfValues(); i++)
         {
             vtkm::Id augnode = augNodesPortal.Get(i);
-            std::cout << i << "\t" << augnode << std::endl;
+            //std::cout << i << "\t" << augnode << std::endl;
             filebettiaug << i << "\t" << augnode << std::endl;
         }
-        std::cout << "Augmented Arcs (" << augArcsPortal.GetNumberOfValues() << ")" << std::endl;
+        //std::cout << "Augmented Arcs (" << augArcsPortal.GetNumberOfValues() << ")" << std::endl;
         filebettiaug << "Augmented Arcs (" << augArcsPortal.GetNumberOfValues() << ")" << std::endl;
         for(int i = 0; i < augArcsPortal.GetNumberOfValues(); i++)
         {
             vtkm::Id augarc = augArcsPortal.Get(i);
-            std::cout << i << "\t" << augarc << std::endl;
+            //std::cout << i << "\t" << augarc << std::endl;
             filebettiaug << i << "\t" << augarc << std::endl;
         }
-        std::cout << "Transferred When (" << transferPortal.GetNumberOfValues() << ")" << std::endl;
+        //std::cout << "Transferred When (" << transferPortal.GetNumberOfValues() << ")" << std::endl;
         filebettiaug << "Transferred When (" << transferPortal.GetNumberOfValues() << ")" << std::endl;
         for(int i = 0; i < transferPortal.GetNumberOfValues(); i++)
         {
-            std::cout << i << "\t" << vtkm::worklet::contourtree_augmented::MaskedIndex(transferPortal.Get(i)) << std::endl;
+            //std::cout << i << "\t" << vtkm::worklet::contourtree_augmented::MaskedIndex(transferPortal.Get(i)) << std::endl;
             filebettiaug << i << "\t" << vtkm::worklet::contourtree_augmented::MaskedIndex(transferPortal.Get(i)) << std::endl;
         }
 
-        std::cout << "Nodes" << std::endl;
+        //std::cout << "Nodes" << std::endl;
         filebettiaug << "Nodes" << std::endl;
         for(int sortID = 0; sortID < nodesPortal.GetNumberOfValues(); sortID++)
         {
             vtkm::Id regularId = nodesPortal.Get(sortID);
-            std::cout << sortID << "\t" << regularId << std::endl;
+            //std::cout << sortID << "\t" << regularId << std::endl;
             filebettiaug << sortID << "\t" << regularId << std::endl;
         }
 
-        std::cout << "Arcs" << std::endl;
+        //std::cout << "Arcs" << std::endl;
         filebettiaug << "Arcs" << std::endl;
         for(int sortID = 0; sortID < arcsPortal.GetNumberOfValues(); sortID++)
         {
             vtkm::Id regularId = arcsPortal.Get(sortID);
             vtkm::Id maskedArc = vtkm::worklet::contourtree_augmented::MaskedIndex(regularId);
-            std::cout << sortID << "\t" << regularId << "\t" << maskedArc << std::endl;
+            //std::cout << sortID << "\t" << regularId << "\t" << maskedArc << std::endl;
             filebettiaug << sortID << "\t" << regularId << "\t" << maskedArc << std::endl;
         }
 
 
-        std::cout << "Supernodes:" << std::endl;
+        //std::cout << "Supernodes:" << std::endl;
         filebettiaug << "Supernodes:" << std::endl;
 //         auto supernodesPortal = contourTree.Supernodes.ReadPortal();
         for(int i = 0; i < supernodesPortal.GetNumberOfValues(); i++)
         {
-            std::cout << i << "\t" << supernodesPortal.Get(i) << std::endl;
+            //std::cout << i << "\t" << supernodesPortal.Get(i) << std::endl;
             filebettiaug << i << "\t" << supernodesPortal.Get(i) << std::endl;
         }
-        std::cout << "Superparents:" << std::endl;
+        //std::cout << "Superparents:" << std::endl;
         filebettiaug << "Superparents:" << std::endl;
         for(int i = 0; i < superparentsPortal.GetNumberOfValues(); i++)
         {
-            std::cout << i << "\t" << superparentsPortal.Get(i) << std::endl;
+            //std::cout << i << "\t" << superparentsPortal.Get(i) << std::endl;
             filebettiaug << i << "\t" << superparentsPortal.Get(i) << std::endl;
         }
-        std::cout << "Superarcs:" << std::endl;
+        //std::cout << "Superarcs:" << std::endl;
         filebettiaug << "Superarcs:" << std::endl;
         for(int i = 0; i < superarcsPortal.GetNumberOfValues(); i++)
         {
             vtkm::Id maskedSuperarc = vtkm::worklet::contourtree_augmented::MaskedIndex(superarcsPortal.Get(i));
-            std::cout << i << "\t" << superarcsPortal.Get(i) << "\t" << maskedSuperarc << std::endl;
+            //std::cout << i << "\t" << superarcsPortal.Get(i) << "\t" << maskedSuperarc << std::endl;
             filebettiaug << i << "\t" << superarcsPortal.Get(i) << "\t" << maskedSuperarc << std::endl;
         }
 
         auto firstSupernodeIterationPortal = contourTree.FirstSupernodePerIteration.ReadPortal();
         auto firstHypernodeIterationPortal = contourTree.FirstHypernodePerIteration.ReadPortal();
 
-        std::cout << "firstSupernodeIterationPortal:" << std::endl;
+        //std::cout << "firstSupernodeIterationPortal:" << std::endl;
         filebettiaug << "firstSupernodeIterationPortal:" << std::endl;
         for(int i = 0; i < firstSupernodeIterationPortal.GetNumberOfValues(); i++)
         {
-            std::cout << i << "\t" << firstSupernodeIterationPortal.Get(i) << std::endl;
+            //std::cout << i << "\t" << firstSupernodeIterationPortal.Get(i) << std::endl;
             filebettiaug << i << "\t" << firstSupernodeIterationPortal.Get(i) << std::endl;
         }
 
-        std::cout << "Hypernodes:" << std::endl;
+        //std::cout << "Hypernodes:" << std::endl;
         filebettiaug << "Hypernodes:" << std::endl;
         for(int i = 0; i < hypernodesPortal.GetNumberOfValues(); i++)
         {
             vtkm::Id hypernodeID = hypernodesPortal.Get(i);
             vtkm::Id hyperparentID = hyperparentsPortal.Get(hypernodeID);
-            std::cout << i << "\t" << hypernodeID << std::endl; //<< "\t" << hyperparentID << std::endl;
+            //std::cout << i << "\t" << hypernodeID << std::endl; //<< "\t" << hyperparentID << std::endl;
             filebettiaug << i << "\t" << hypernodeID << std::endl; //<< "\t" << hyperparentID << std::endl;
         }
 
-        std::cout << "Hyperparents:" << std::endl;
+        //std::cout << "Hyperparents:" << std::endl;
         filebettiaug << "Hyperparents:" << std::endl;
         for(int i = 0; i < hyperparentsPortal.GetNumberOfValues(); i++)
         {
-            std::cout << i << ") " << hyperparentsPortal.Get(i) << std::endl;
+            //std::cout << i << ") " << hyperparentsPortal.Get(i) << std::endl;
             filebettiaug << i << ") " << hyperparentsPortal.Get(i) << std::endl;
         }
 
-        std::cout << "Hyperarcs:" << std::endl;
+        //std::cout << "Hyperarcs:" << std::endl;
         filebettiaug << "Hyperarcs:" << std::endl;
         for(int i = 0; i < hyperarcsPortal.GetNumberOfValues(); i++)
         {
             vtkm::Id maskedHyperarc = vtkm::worklet::contourtree_augmented::MaskedIndex(hyperarcsPortal.Get(i));
-            std::cout << i << "\t" << hyperarcsPortal.Get(i) << "\t" << maskedHyperarc << std::endl;
+            //std::cout << i << "\t" << hyperarcsPortal.Get(i) << "\t" << maskedHyperarc << std::endl;
             filebettiaug << i << "\t" << hyperarcsPortal.Get(i) << "\t" << maskedHyperarc << std::endl;
         }
 
-        std::cout << "firstHypernodeIterationPortal:" << std::endl;
+        //std::cout << "firstHypernodeIterationPortal:" << std::endl;
         filebettiaug << "firstHypernodeIterationPortal:" << std::endl;
         for(int i = 0; i < firstHypernodeIterationPortal.GetNumberOfValues(); i++)
         {
-            std::cout << i << "\t" << firstHypernodeIterationPortal.Get(i) << std::endl;
+            //std::cout << i << "\t" << firstHypernodeIterationPortal.Get(i) << std::endl;
             filebettiaug << i << "\t" << firstHypernodeIterationPortal.Get(i) << std::endl;
         }
 
-        std::cout << "node->supernode->superarc(superparent)->hypernode->hyperarc(hyperparent) mappings" << std::endl;
+        //std::cout << "node->supernode->superarc(superparent)->hypernode->hyperarc(hyperparent) mappings" << std::endl;
         filebettiaug << "node->supernode->superarc(superparent)->hypernode->hyperarc(hyperparent) mappings" << std::endl;
         for(int sortID = 0; sortID < nodesPortal.GetNumberOfValues(); sortID++)
         {
@@ -1681,8 +1697,8 @@ std::vector<vtkm::Id> static ComputeSortIDStdVector(const vtkm::cont::DataSet& i
             vtkm::Id maskedSupertarget = vtkm::worklet::contourtree_augmented::MaskedIndex(supertarget);
 //            std::cout << supertarget << " - " /*<< vtkm::cont::ArrayGetValue(supertarget, contourTree.Superparents)*/ << std::endl;
 
-             std::cout << sortID << "\t" << regularId << "\t" << superparentId << "(" << maskedSupertarget << ")"
-                       << "\t" << hyperparentId << "(" << maskedHypertarget << ")" << std::endl;
+             //std::cout << sortID << "\t" << regularId << "\t" << superparentId << "(" << maskedSupertarget << ")"
+                       //<< "\t" << hyperparentId << "(" << maskedHypertarget << ")" << std::endl;
              filebettiaug << sortID << "\t" << regularId << "\t" << superparentId << "(" << maskedSupertarget << ")"
                        << "\t" << hyperparentId << "(" << maskedHypertarget << ")" << std::endl;
         }
@@ -1743,7 +1759,8 @@ std::vector<vtkm::Id> static ComputeSortIDStdVector(const vtkm::cont::DataSet& i
 
         auto ct_betti_portal = contourTree.SupernodeBetti.WritePortal();
         auto ct_BettiOriginalSuperparents_portal = contourTree.BettiOriginalSuperparents.WritePortal();
-#if DEBUG_PRINT_PACTBD
+        
+#if WRITE_EXTRA_FILES
         filebettiaug << "The BID array for rehooking up the super{hyper}structure:" << std::endl;
         filebettiaug << "id)\thpID\tval_filp\tregularID\tSP" << std::endl;
         for(int i = 0; i < nodes_to_relabel_regularID.size(); i++)
@@ -1761,6 +1778,10 @@ std::vector<vtkm::Id> static ComputeSortIDStdVector(const vtkm::cont::DataSet& i
                            << std::endl;
         }
 
+#endif
+
+#if WRITE_EXTRA_FILES
+	std::cout << ORANGE  << "Written: ContourTreeBetti--BettiAugmentation.txt" << RESET<< std::endl;
 #endif
 
 

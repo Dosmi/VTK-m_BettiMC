@@ -125,9 +125,16 @@ cont::DataSet read2DUniformGridData(std::string fileName, std::string fieldName)
 
 int main(int argc, char* argv[])
 {
-    // Initialising VTKm (for things like log level, setting calling thread, etc.)
-    auto opts = cont::InitializeOptions::DefaultAnyDevice;
-    cont::InitializeResult config = cont::Initialize(argc, argv, opts);
+    //// Initialising VTKm (for things like log level, setting calling thread, etc.)
+    //auto opts = cont::InitializeOptions::DefaultAnyDevice;
+    //cont::InitializeResult config = cont::Initialize(argc, argv, opts);
+    
+    		  // initialize vtkm-m (e.g., logging via -v and device via the -d option)
+	  vtkm::cont::InitializeOptions vtkm_initialize_options =
+		vtkm::cont::InitializeOptions::RequireDevice;
+	  vtkm::cont::InitializeResult vtkm_config =
+		vtkm::cont::Initialize(argc, argv, vtkm_initialize_options);
+	  auto device = vtkm_config.Device;
 
 
 #ifdef DEBUG_PRINT
@@ -191,6 +198,8 @@ int main(int argc, char* argv[])
     cliApp.add_option("--meshIdB", meshIdB, "Tells TBB how many threads to use.");
 
     CLI11_PARSE(cliApp, argc, argv);
+    
+
 
 //    // Read in Data File
 //    vtkm::cont::DataSet inputData;

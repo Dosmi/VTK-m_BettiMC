@@ -270,6 +270,15 @@ std::string ContourTreeDotGraphPrintSerial(
   // array with flags for "necessary"
   const VectorType& perNodeValues = VectorType()) // an arbitrary vector of values
 {                                                 // ContourTreeDotGraphPrintSerial()
+	
+	// Red text formatting for highlighting some console output:
+	const std::string GREEN = "\033[38;2;50;205;50m";
+	const std::string DARKGREEN = "\033[38;2;34;139;34m";
+	const std::string RED = "\033[31m";  // Start red text
+	const std::string ORANGE = "\033[38;2;255;165;0m";  // Start red text
+	const std::string YELLOW = "\033[38;2;240;240;13m";  // Warm, readable yellow
+	const std::string RESET = "\033[0m"; // End red text	
+
   // initialise a string stream to capture the output
   std::stringstream outStream;
 
@@ -325,8 +334,9 @@ std::string ContourTreeDotGraphPrintSerial(
 //  auto globalIdsPortal = globalIds.ReadPortal();
   auto dataValuesPortal = field.ReadPortal();
 
-  std::cout << "Writing ... ContourTreeGraph--original-fullCT-REGULAR-VALUE-SORT-SP.txt" << std::endl;
-  std::ofstream file("ContourTreeGraph--original-fullCT-REGULAR-VALUE-SORT-SP.txt");
+  std::ofstream file("ContourTreeGraph--original-fullCT-REGULAR-VALUE-SORT-SP.txt");  
+  std::cout << ORANGE  << "Written: ContourTreeGraph--original-fullCT-REGULAR-VALUE-SORT-SP.txt" << RESET<< std::endl;
+  
   for (vtkm::Id node = 0; node < contourTree.Nodes.GetNumberOfValues(); node++)
   { // per node
     // the nodes array is actually sorted by superarc, but the superarcs array is not

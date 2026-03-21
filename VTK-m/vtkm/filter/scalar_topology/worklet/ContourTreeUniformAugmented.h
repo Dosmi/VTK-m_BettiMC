@@ -83,7 +83,7 @@
 // PACT (Parcel-based (Betti) Augmented Contour Tree) contribution
 #include <vtkm/filter/scalar_topology/worklet/contourtree_distributed/PrintGraph.h>
 
-#define WRITE_FILES 1
+#define WRITE_FILES 0
 
 namespace vtkm
 {
@@ -180,6 +180,15 @@ public:
            bool useMarchingCubes = false,
            unsigned int computeRegularStructure = 1)
   {
+	  
+	// Red text formatting for highlighting some console output:
+	const std::string GREEN = "\033[38;2;50;205;50m";
+	const std::string DARKGREEN = "\033[38;2;34;139;34m";
+    const std::string RED = "\033[31m";  // Start red text
+    const std::string ORANGE = "\033[38;2;255;165;0m";  // Start red text
+    const std::string YELLOW = "\033[38;2;240;240;13m";  // Warm, readable yellow
+    const std::string RESET = "\033[0m"; // End red text
+	  
     using namespace vtkm::worklet::contourtree_augmented;
     // 2D Contour Tree
     if (meshSize[2] == 1)
@@ -213,8 +222,10 @@ public:
                      
 #if WRITE_FILES
 
-		  std::cout << "Writing ... CT-full-superdot.gv" << std::endl;
-          std::ofstream outFile("CT-full-superdot.gv");
+	
+	//std::cout << "Writing ... CT-full-superdot.gv" << std::endl;
+	std::ofstream outFile("CT-full-superdot.gv");
+	std::cout << ORANGE  << "Written: CT-full-superdot.gv" << RESET<< std::endl;
 
           //// for CT visualising for 2025 papers enable SHOW_SUPER_STRUCTURE SHOW_SUPERNODE_ID SHOW_SUPERARC_ID SHOW_MESH_SORT_ID
                       //vtkm::Id detailedMask =   vtkm::worklet::contourtree_distributed::SHOW_SUPER_STRUCTURE \
@@ -273,11 +284,11 @@ public:
                      mesh.GetMeshBoundaryExecutionObject());
                      
                      
-	 #if WRITE_FILES
+ #if WRITE_FILES
 
 		  std::cout << "CT Completed on Freudenthal Mesh... " << std::endl;
-		  std::cout << "Writing ... CT-full-superdot.gv" << std::endl;
           std::ofstream outFile("CT-full-superdot-freud.gv");
+          std::cout << ORANGE  << "Written: CT-full-superdot-freud.gv" << RESET<< std::endl;
 
 		// for branch colourings (external py script)
           vtkm::Id detailedMask =   vtkm::worklet::contourtree_distributed::SHOW_SUPER_STRUCTURE \
